@@ -88,12 +88,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
 # 安装 cloudflared
-RUN apk add --no-cache curl && \
-    curl -L --output cloudflared.tgz https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.tar.gz && \
-    tar -xzf cloudflared.tgz && \
-    chmod +x cloudflared && \
-    mv cloudflared /usr/local/bin/ && \
-    rm cloudflared.tgz
+COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 
 # 设置环境变量
 ENV PORT=3000
