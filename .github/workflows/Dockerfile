@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # 克隆正确的仓库
-RUN git clone https://github.com/ChatGPTNextWeb/ChatGPT-Next-Web.git .
+RUN git clone https://github.com/QAbot-zh/ChatGPT-Next-Web.git .
 
 # 创建自定义样式文件
 RUN mkdir -p app/styles/
