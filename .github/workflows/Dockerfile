@@ -15,10 +15,10 @@ FROM node:18-alpine AS runner
 WORKDIR /app
 
 # 从构建阶段复制必要文件
-COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/next.config.js ./next.config.js
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/.next/server ./.next/server
 
 # 只安装生产依赖
 RUN npm install --production
