@@ -25,7 +25,7 @@ jobs:
       
       - name: Add upstream remote
         run: |
-          git remote add upstream https://github.com/ChatGPTNextWeb/ChatGPT-Next-Web.git
+          git remote add upstream https://github.com/QAbot-zh/ChatGPT-Next-Web.git
           git remote -v
       
       - name: Fetch from upstream
