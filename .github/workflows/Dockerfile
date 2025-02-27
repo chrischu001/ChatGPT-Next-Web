@@ -10,68 +10,99 @@ RUN git clone https://github.com/QAbot-zh/ChatGPT-Next-Web.git .
 
 # 创建自定义样式文件
 RUN mkdir -p app/styles/
-RUN echo '@import "./animation.scss"; \
-@import "./window.scss"; \
-@mixin light { \
-  --theme: light; \
-  --white: #fff; \
-  --black: #303030; \
-  --gray: #fafafa; \
-  --primary: #315ef8; \
-  --second: #f3f3f6; \
-  --hover-color: #f3f3f3; \
-  --bar-color: rgba(0,0,0,.1); \
-  --theme-color: var(--gray); \
-  --shadow: 50px 50px 100px 10px rgba(0,0,0,.1); \
-  --card-shadow: 0px 2px 4px 0px rgba(0,0,0,.05); \
-  --border-in-light: 1px solid #dedede; \
-  --sidebar-sub-title: rgba(38,47,156,.5); \
-} \
-@mixin dark { \
-  --theme: dark; \
-  --white: #1e1e1e; \
-  --black: #bbb; \
-  --gray: #151515; \
-  --primary: #315ef8; \
-  --second: #26262c; \
-  --hover-color: #323232; \
-  --bar-color: rgba(255, 255, 255, 0.1); \
-  --border-in-light: 1px solid rgba(255, 255, 255, 0.192); \
-  --theme-color: var(--gray); \
-  div:not(.no-dark) > svg { \
-    filter: invert(0.5); \
-  } \
-} \
-.light { \
-  @include light; \
-} \
-.dark { \
-  @include dark; \
-} \
-.mask { \
-  filter: invert(0.8); \
-} \
-:root { \
-  @include light; \
-  --window-width: 90vw; \
-  --window-height: 90vh; \
-  --sidebar-width: 300px; \
-  --window-content-width: calc(100% - var(--sidebar-width)); \
-  --message-max-width: 80%; \
-  --full-height: 100%; \
-} \
-@media only screen and (max-width: 600px) { \
-  :root { \
-    --window-width: 100vw; \
-    --window-height: var(--full-height); \
-    --sidebar-width: 100vw; \
-    --window-content-width: var(--window-width); \
-    --message-max-width: 100%; \
-  } \
-  .no-mobile { \
-    display: none; \
-  } \
-}' > app/styles/globals.scss
+cat > app/styles/custom_globals.scss << 'EOF'
+@import "./animation.scss";
+@import "./window.scss";
+
+@mixin light {
+  --theme: light;
+  --white: #fff;
+  --black: #303030;
+  --gray: #fafafa;
+  --primary: #315ef8;
+  --second: #f3f3f6;
+  --hover-color: #f3f3f3;
+  --bar-color: rgba(0,0,0,.1);
+  --theme-color: var(--gray);
+  --shadow: 50px 50px 100px 10px rgba(0,0,0,.1);
+  --card-shadow: 0px 2px 4px 0px rgba(0,0,0,.05);
+  --border-in-light: 1px solid #dedede;
+  --sidebar-sub-title: rgba(38,47,156,.5);
+}
+
+@mixin dark {
+  --theme: dark;
+  --white: #1e1e1e;
+  --black: #bbb;
+  --gray: #151515;
+  --primary: #315ef8;
+  --second: #26262c;
+  --hover-color: #323232;
+  --bar-color: rgba(255, 255, 255, 0.1);
+  --border-in-light: 1px solid rgba(255, 255, 255, 0.192);
+  --theme-color: var(--gray);
+
+  div:not(.no-dark) > svg {
+    filter: invert(0.5);
+  }
+}
+
+.light {
+  @include light;
+}
+
+.dark {
+  @include dark;
+}
+
+.mask {
+  filter: invert(0.8);
+}
+
+:root {
+  @include light;
+
+  --window-width: 90vw;
+  --window-height: 90vh;
+  --sidebar-width: 300px;
+  --window-content-width: calc(100% - var(--sidebar-width));
+  --message-max-width: 80%;
+  --full-height: 100%;
+}
+
+@media only screen and (max-width: 600px) {
+  :root {
+    --window-width: 100vw;
+    --window-height: var(--full-height);
+    --sidebar-width: 100vw;
+    --window-content-width: var(--window-width);
+    --message-max-width: 100%;
+  }
+
+  .no-mobile {
+    display: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    @include dark;
+  }
+}
+EOF
+
+# 将原始样式的其余部分附加到新样式
+sed -n '/html {/,$p' app/styles/globals.scss >> app/styles/custom_globals.scss
+
+# 替换原始样式文件
+cp app/styles/custom_globals.scss app/styles/globals.scss
+
+# 修改标题和副标题
+sed -i 's/NextChat/NieAI Chat/g' app/components/sidebar.tsx
+sed -i 's/Build your own AI assistant./Quickly start your AI journey./g' app/components/sidebar.tsx
+
+# 替换 logo
+cp .github/assets/chatgpt.svg app/icons/chatgpt.svg
 
 # 安装依赖并构建
 RUN npm install
@@ -96,6 +127,9 @@ ENV HOSTNAME=0.0.0.0
 ENV NODE_ENV=production
 
 EXPOSE 3000
+
+
+
 
 # 启动服务，如果提供了CF_TOKEN则启动Cloudflare tunnel
 CMD if [ -n "$CF_TOKEN" ]; then \
