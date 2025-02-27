@@ -9,7 +9,7 @@ RUN apk add --no-cache git wget
 RUN git clone https://github.com/QAbot-zh/ChatGPT-Next-Web.git .
 
 # 下载SVG图标
-RUN wget -O app/icon/chatgpt.svg https://github.com/chrischu001/ChatGPT-Next-Web/raw/refs/heads/main/.github/assets/chatgpt.svg
+COPY /.github/assets/chatgpt.svg app/icon/chatgpt.svg
 
 # 创建自定义样式文件
 RUN mkdir -p app/styles/ && \
