@@ -2,11 +2,13 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# 安装git
-RUN apk add --no-cache git
+# 安装git和wget
+RUN apk add --no-cache git wget
 
 # 克隆正确的仓库
 RUN git clone https://github.com/QAbot-zh/ChatGPT-Next-Web.git .
+
+# 下载SVG图标
 RUN wget -O chatgpt.svg https://github.com/chrischu001/ChatGPT-Next-Web/raw/refs/heads/main/.github/assets/chatgpt.svg
 
 # 创建自定义样式文件
@@ -100,8 +102,9 @@ RUN cp app/styles/custom_globals.scss app/styles/globals.scss
 RUN sed -i 's/NextChat/NieAI Chat/g' app/components/sidebar.tsx && \
     sed -i 's/Build your own AI assistant./Quickly start your AI journey./g' app/components/sidebar.tsx
 
-#复制logo
-COPY app/chatgpt.svg app/icons/chatgpt.svg
+# 创建icons目录并复制logo
+RUN mkdir -p app/icons/
+RUN cp chatgpt.svg app/icons/chatgpt.svg
 
 # 安装依赖并构建
 RUN npm install
