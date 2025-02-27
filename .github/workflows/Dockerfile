@@ -9,8 +9,8 @@ RUN apk add --no-cache git
 RUN git clone https://github.com/QAbot-zh/ChatGPT-Next-Web.git .
 
 # 创建自定义样式文件
-RUN mkdir -p app/styles/
-RUN echo '@import "./animation.scss";\n \
+RUN mkdir -p app/styles/ && \
+    echo '@import "./animation.scss";\n \
 @import "./window.scss";\n\
 \n\
 @mixin light {\n\
@@ -90,17 +90,17 @@ RUN echo '@import "./animation.scss";\n \
 }' > app/styles/custom_globals.scss
 
 # 将原始样式的其余部分附加到新样式
-sed -n '/html {/,$p' app/styles/globals.scss >> app/styles/custom_globals.scss
+RUN sed -n '/html {/,$p' app/styles/globals.scss >> app/styles/custom_globals.scss
 
 # 替换原始样式文件
-cp app/styles/custom_globals.scss app/styles/globals.scss
+RUN cp app/styles/custom_globals.scss app/styles/globals.scss
 
 # 修改标题和副标题
-sed -i 's/NextChat/NieAI Chat/g' app/components/sidebar.tsx
-sed -i 's/Build your own AI assistant./Quickly start your AI journey./g' app/components/sidebar.tsx
+RUN sed -i 's/NextChat/NieAI Chat/g' app/components/sidebar.tsx && \
+    sed -i 's/Build your own AI assistant./Quickly start your AI journey./g' app/components/sidebar.tsx
 
 # 替换 logo
-cp .github/assets/chatgpt.svg app/icons/chatgpt.svg
+RUN cp .github/assets/chatgpt.svg app/icons/chatgpt.svg
 
 # 安装依赖并构建
 RUN npm install
@@ -125,9 +125,6 @@ ENV HOSTNAME=0.0.0.0
 ENV NODE_ENV=production
 
 EXPOSE 3000
-
-
-
 
 # 启动服务，如果提供了CF_TOKEN则启动Cloudflare tunnel
 CMD if [ -n "$CF_TOKEN" ]; then \
