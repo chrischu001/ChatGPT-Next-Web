@@ -44,6 +44,7 @@ RUN echo '@import "./animation.scss"; \
     filter: invert(0.5); \
   } \
 } \
+.home_container{margin:auto} \
 .light { \
   @include light; \
 } \
