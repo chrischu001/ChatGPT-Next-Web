@@ -100,7 +100,7 @@ RUN sed -i 's/NextChat/NieAI Chat/g' app/components/sidebar.tsx && \
     sed -i 's/Build your own AI assistant./Quickly start your AI journey./g' app/components/sidebar.tsx
 
 # 下载SVG图标
-RUN curl -L https://github.com/chrischu001/ChatGPT-Next-Web/raw/refs/heads/main/.github/assets/chatgpt.svg -o app/icons/chatgpt.svg
+RUN wget -O app/icons/chatgpt.svg https://github.com/chrischu001/ChatGPT-Next-Web/raw/refs/heads/main/.github/assets/chatgpt.svg
 
 # 安装依赖并构建
 RUN npm install
