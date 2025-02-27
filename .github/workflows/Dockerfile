@@ -10,86 +10,84 @@ RUN git clone https://github.com/QAbot-zh/ChatGPT-Next-Web.git .
 
 # 创建自定义样式文件
 RUN mkdir -p app/styles/
-cat > app/styles/custom_globals.scss << 'EOF'
-@import "./animation.scss";
-@import "./window.scss";
-
-@mixin light {
-  --theme: light;
-  --white: #fff;
-  --black: #303030;
-  --gray: #fafafa;
-  --primary: #315ef8;
-  --second: #f3f3f6;
-  --hover-color: #f3f3f3;
-  --bar-color: rgba(0,0,0,.1);
-  --theme-color: var(--gray);
-  --shadow: 50px 50px 100px 10px rgba(0,0,0,.1);
-  --card-shadow: 0px 2px 4px 0px rgba(0,0,0,.05);
-  --border-in-light: 1px solid #dedede;
-  --sidebar-sub-title: rgba(38,47,156,.5);
-}
-
-@mixin dark {
-  --theme: dark;
-  --white: #1e1e1e;
-  --black: #bbb;
-  --gray: #151515;
-  --primary: #315ef8;
-  --second: #26262c;
-  --hover-color: #323232;
-  --bar-color: rgba(255, 255, 255, 0.1);
-  --border-in-light: 1px solid rgba(255, 255, 255, 0.192);
-  --theme-color: var(--gray);
-
-  div:not(.no-dark) > svg {
-    filter: invert(0.5);
-  }
-}
-
-.light {
-  @include light;
-}
-
-.dark {
-  @include dark;
-}
-
-.mask {
-  filter: invert(0.8);
-}
-
-:root {
-  @include light;
-
-  --window-width: 90vw;
-  --window-height: 90vh;
-  --sidebar-width: 300px;
-  --window-content-width: calc(100% - var(--sidebar-width));
-  --message-max-width: 80%;
-  --full-height: 100%;
-}
-
-@media only screen and (max-width: 600px) {
-  :root {
-    --window-width: 100vw;
-    --window-height: var(--full-height);
-    --sidebar-width: 100vw;
-    --window-content-width: var(--window-width);
-    --message-max-width: 100%;
-  }
-
-  .no-mobile {
-    display: none;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    @include dark;
-  }
-}
-EOF
+RUN echo '@import "./animation.scss";\n \
+@import "./window.scss";\n\
+\n\
+@mixin light {\n\
+  --theme: light;\n\
+  --white: #fff;\n\
+  --black: #303030;\n\
+  --gray: #fafafa;\n\
+  --primary: #315ef8;\n\
+  --second: #f3f3f6;\n\
+  --hover-color: #f3f3f3;\n\
+  --bar-color: rgba(0,0,0,.1);\n\
+  --theme-color: var(--gray);\n\
+  --shadow: 50px 50px 100px 10px rgba(0,0,0,.1);\n\
+  --card-shadow: 0px 2px 4px 0px rgba(0,0,0,.05);\n\
+  --border-in-light: 1px solid #dedede;\n\
+  --sidebar-sub-title: rgba(38,47,156,.5);\n\
+}\n\
+\n\
+@mixin dark {\n\
+  --theme: dark;\n\
+  --white: #1e1e1e;\n\
+  --black: #bbb;\n\
+  --gray: #151515;\n\
+  --primary: #315ef8;\n\
+  --second: #26262c;\n\
+  --hover-color: #323232;\n\
+  --bar-color: rgba(255, 255, 255, 0.1);\n\
+  --border-in-light: 1px solid rgba(255, 255, 255, 0.192);\n\
+  --theme-color: var(--gray);\n\
+\n\
+  div:not(.no-dark) > svg {\n\
+    filter: invert(0.5);\n\
+  }\n\
+}\n\
+\n\
+.light {\n\
+  @include light;\n\
+}\n\
+\n\
+.dark {\n\
+  @include dark;\n\
+}\n\
+\n\
+.mask {\n\
+  filter: invert(0.8);\n\
+}\n\
+\n\
+:root {\n\
+  @include light;\n\
+\n\
+  --window-width: 90vw;\n\
+  --window-height: 90vh;\n\
+  --sidebar-width: 300px;\n\
+  --window-content-width: calc(100% - var(--sidebar-width));\n\
+  --message-max-width: 80%;\n\
+  --full-height: 100%;\n\
+}\n\
+\n\
+@media only screen and (max-width: 600px) {\n\
+  :root {\n\
+    --window-width: 100vw;\n\
+    --window-height: var(--full-height);\n\
+    --sidebar-width: 100vw;\n\
+    --window-content-width: var(--window-width);\n\
+    --message-max-width: 100%;\n\
+  }\n\
+\n\
+  .no-mobile {\n\
+    display: none;\n\
+  }\n\
+}\n\
+\n\
+@media (prefers-color-scheme: dark) {\n\
+  :root {\n\
+    @include dark;\n\
+  }\n\
+}' > app/styles/custom_globals.scss
 
 # 将原始样式的其余部分附加到新样式
 sed -n '/html {/,$p' app/styles/globals.scss >> app/styles/custom_globals.scss
