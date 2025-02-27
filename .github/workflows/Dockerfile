@@ -9,7 +9,7 @@ RUN apk add --no-cache git wget
 RUN git clone https://github.com/QAbot-zh/ChatGPT-Next-Web.git .
 
 # 下载SVG图标
-RUN wget -O chatgpt.svg https://github.com/chrischu001/ChatGPT-Next-Web/raw/refs/heads/main/.github/assets/chatgpt.svg
+RUN wget -O app/icon/chatgpt.svg https://github.com/chrischu001/ChatGPT-Next-Web/raw/refs/heads/main/.github/assets/chatgpt.svg
 
 # 创建自定义样式文件
 RUN mkdir -p app/styles/ && \
@@ -101,10 +101,6 @@ RUN cp app/styles/custom_globals.scss app/styles/globals.scss
 # 修改标题和副标题
 RUN sed -i 's/NextChat/NieAI Chat/g' app/components/sidebar.tsx && \
     sed -i 's/Build your own AI assistant./Quickly start your AI journey./g' app/components/sidebar.tsx
-
-# 创建icons目录并复制logo
-RUN mkdir -p app/icons/
-RUN cp chatgpt.svg app/icons/chatgpt.svg
 
 # 安装依赖并构建
 RUN npm install
