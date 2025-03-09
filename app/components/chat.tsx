@@ -21,7 +21,7 @@ import SpeakStopIcon from "../icons/speak-stop.svg";
 import LoadingIcon from "../icons/three-dots.svg";
 import LoadingButtonIcon from "../icons/loading.svg";
 import PromptIcon from "../icons/prompt.svg";
-import MaskIcon from "../icons/mask.svg";
+// import MaskIcon from "../icons/mask.svg";
 import MaxIcon from "../icons/max.svg";
 import MinIcon from "../icons/min.svg";
 import ResetIcon from "../icons/reload.svg";
@@ -35,9 +35,9 @@ import ConfirmIcon from "../icons/confirm.svg";
 import CancelIcon from "../icons/cancel.svg";
 import ImageIcon from "../icons/image.svg";
 
-import LightIcon from "../icons/light.svg";
-import DarkIcon from "../icons/dark.svg";
-import AutoIcon from "../icons/auto.svg";
+// import LightIcon from "../icons/light.svg";
+// import DarkIcon from "../icons/dark.svg";
+// import AutoIcon from "../icons/auto.svg";
 import BottomIcon from "../icons/bottom.svg";
 import StopIcon from "../icons/pause.svg";
 import RobotIcon from "../icons/robot.svg";
@@ -120,7 +120,11 @@ import { prettyObject } from "../utils/format";
 import { ExportMessageModal } from "./exporter";
 import { getClientConfig } from "../config/client";
 import { useAllModels } from "../utils/hooks";
-import { MultimodalContent, getClientApi } from "../client/api";
+import {
+  LLMModelProvider,
+  MultimodalContent,
+  getClientApi,
+} from "../client/api";
 
 import { ClientApi } from "../client/api";
 import { createTTSPlayer } from "../utils/audio";
@@ -136,6 +140,14 @@ const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   loading: () => <LoadingIcon />,
 });
 
+interface Model {
+  available: boolean;
+  name: string;
+  displayName?: string;
+  description?: string;
+  provider?: LLMModelProvider;
+  isDefault?: boolean;
+}
 export function SessionConfigModel(props: { onClose: () => void }) {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
@@ -487,6 +499,7 @@ export function ChatActions(props: {
   setShowShortcutKeyModal: React.Dispatch<React.SetStateAction<boolean>>;
   userInput: string;
   setUserInput: (input: string) => void;
+  modelTable: Model[];
 }) {
   const config = useAppConfig();
   const navigate = useNavigate();
@@ -718,24 +731,16 @@ export function ChatActions(props: {
   const stopAll = () => ChatControllerPool.stopAll();
 
   // switch model
-  const currentModel = chatStore.currentSession().mask.modelConfig.model;
+  const models = props.modelTable;
+  const currentModel = session.mask.modelConfig.model;
   const currentProviderName =
     session.mask.modelConfig?.providerName || ServiceProvider.OpenAI;
-  const allModels = useAllModels();
-  const models = useMemo(() => {
-    const filteredModels = allModels.filter((m) => m.available);
-    const defaultModel = filteredModels.find((m) => m.isDefault);
+  const currentModelDisplayName = models.find(
+    (m) =>
+      m.name === currentModel &&
+      m.provider?.providerName === currentProviderName,
+  )?.displayName;
 
-    if (defaultModel) {
-      const arr = [
-        defaultModel,
-        ...filteredModels.filter((m) => m !== defaultModel),
-      ];
-      return arr;
-    } else {
-      return filteredModels;
-    }
-  }, [allModels]);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showUploadImage, setShowUploadImage] = useState(false);
 
@@ -798,7 +803,7 @@ export function ChatActions(props: {
             icon={props.uploading ? <LoadingButtonIcon /> : <ImageIcon />}
           />
         )}
-        {!isMobileScreen && (
+        {/* {!isMobileScreen && (
           <ChatAction
             onClick={nextTheme}
             text={Locale.Chat.InputActions.Theme[theme]}
@@ -814,7 +819,7 @@ export function ChatActions(props: {
               </>
             }
           />
-        )}
+        )} */}
 
         <ChatAction
           onClick={props.showPromptHints}
@@ -822,7 +827,7 @@ export function ChatActions(props: {
           icon={<PromptIcon />}
         />
 
-        {!isMobileScreen && (
+        {/* {!isMobileScreen && (
           <ChatAction
             onClick={() => {
               navigate(Path.Masks);
@@ -830,7 +835,7 @@ export function ChatActions(props: {
             text={Locale.Chat.InputActions.Masks}
             icon={<MaskIcon />}
           />
-        )}
+        )} */}
 
         <ChatAction
           text={Locale.Chat.InputActions.Clear}
@@ -850,7 +855,7 @@ export function ChatActions(props: {
         <ChatAction
           onClick={() => setShowModelSelector(true)}
           alwaysShowText={true}
-          text={currentModel}
+          text={currentModelDisplayName || currentModel}
           icon={<RobotIcon />}
         />
 
@@ -1162,7 +1167,7 @@ function ChatInputActions(props: {
     </div>
   );
 }
-function _Chat() {
+function _Chat({ modelTable }: { modelTable: Model[] }) {
   type RenderMessage = ChatMessage & { preview?: boolean };
 
   const chatStore = useChatStore();
@@ -1222,13 +1227,14 @@ function _Chat() {
   );
 
   // auto grow input
-  const [inputRows, setInputRows] = useState(2);
+  const minInputRows = 3;
+  const [inputRows, setInputRows] = useState(minInputRows);
   const measure = useDebouncedCallback(
     () => {
       const rows = inputRef.current ? autoGrowTextArea(inputRef.current) : 1;
       const inputRows = Math.min(
         20,
-        Math.max(2 + Number(!isMobileScreen), rows),
+        Math.max(minInputRows + Number(!isMobileScreen), rows),
       );
       setInputRows(inputRows);
     },
@@ -2073,7 +2079,9 @@ function _Chat() {
                             <MaskAvatar
                               avatar={session.mask.avatar}
                               model={
-                                message.model || session.mask.modelConfig.model
+                                message.displayName ||
+                                message.model ||
+                                session.mask.modelConfig.model
                               }
                             />
                           )}
@@ -2082,7 +2090,7 @@ function _Chat() {
                     </div>
                     {!isUser && (
                       <div className={styles["chat-model-name"]}>
-                        {message.model}
+                        {message.displayName || message.model}
                       </div>
                     )}
 
@@ -2175,7 +2183,11 @@ function _Chat() {
                     {isContext
                       ? Locale.Chat.IsContext
                       : `${message.date.toLocaleString()}${
-                          message.model ? ` - Model: ${message.model}` : ""
+                          message.model
+                            ? ` - Model: ${
+                                message.displayName || message.model
+                              }`
+                            : ""
                         }`}
                   </div>
                   {iconDownEnabled && showActions && (
@@ -2231,6 +2243,7 @@ function _Chat() {
           setShowShortcutKeyModal={setShowShortcutKeyModal}
           userInput={userInput}
           setUserInput={setUserInput}
+          modelTable={modelTable}
         />
         <label
           className={`${styles["chat-input-panel-inner"]} ${
@@ -2282,7 +2295,7 @@ function _Chat() {
           )}
           <IconButton
             icon={<SendWhiteIcon />}
-            text={Locale.Chat.Send}
+            text={isMobileScreen ? "" : Locale.Chat.Send}
             className={styles["chat-input-send"]}
             type="primary"
             onClick={() => doSubmit(userInput)}
@@ -2312,5 +2325,44 @@ function _Chat() {
 export function Chat() {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
-  return <_Chat key={session.id}></_Chat>;
+  const allModels = useAllModels();
+  const hasUpdatedDisplayName = useRef(false);
+
+  const modelTable = useMemo(() => {
+    const filteredModels = allModels.filter((m) => m.available);
+    const defaultModel = filteredModels.find((m) => m.isDefault);
+
+    if (defaultModel) {
+      const arr = [
+        defaultModel,
+        ...filteredModels.filter((m) => m !== defaultModel),
+      ];
+      return arr;
+    } else {
+      return filteredModels;
+    }
+  }, [allModels]);
+  // Update session messages based on modelTable
+  useEffect(() => {
+    // 仅在 session 最后一条消息 id 变化时执行，即有新的消息进入队列
+
+    let messagesChanged = false;
+    for (let i = 0; i < session.messages.length; i++) {
+      const message = session.messages[i];
+      if (message.role !== "user" && !message.displayName && message.model) {
+        const displayName = modelTable.find(
+          (model) =>
+            model.name === message.model &&
+            model.provider?.providerName === message.providerName,
+        )?.displayName;
+
+        if (displayName !== message.displayName) {
+          // 仅当 displayName 发生变化时才更新
+          session.messages[i].displayName = displayName;
+        }
+      }
+    }
+  }, [session.messages[session.messages.length - 1]?.id]);
+
+  return <_Chat key={session.id} modelTable={modelTable}></_Chat>;
 }
