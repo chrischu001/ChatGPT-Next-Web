@@ -124,15 +124,30 @@ const en: LocaleType = {
         SuccessPrivacyToast:
           "This privacy mosaic has been completed and replaced the input content.",
       },
+      UploadFile: {
+        Title: "Upload Plain Text File",
+        FileTooLarge: "Only support to upload single file with 100k.",
+        TooManyFile: "Exceeds the maximum number of files allowed for upload.",
+        UnsupportedFileType: "Unsupported File Type.",
+        FailToRead: "File content reading failed.",
+        DuplicateFile: (filename: string) =>
+          `The file "${filename}" already exists. Please do not upload it again.`,
+      },
     },
     Rename: "Rename Chat",
     Typing: "Typing…",
-    Input: (submitKey: string) => {
+    Input: (submitKey: string, isMobileScreen: boolean = false) => {
+      if (isMobileScreen) {
+        return "/ to search prompts, : to use commands\nInput your question...";
+      }
       var inputHints = `${submitKey} to send`;
       if (submitKey === String(SubmitKey.Enter)) {
         inputHints += ", Shift + Enter to wrap";
       }
-      return inputHints + ", / to search prompts, : to use commands";
+      return (
+        inputHints +
+        ", / to search prompts, : to use commands\nCtrl + Shift + ; to quickly copy the last code block\nCtrl + Shift + L to regenerate AI response"
+      );
     },
     Send: "Send",
     StartSpeak: "Start Speak",
@@ -457,6 +472,11 @@ const en: LocaleType = {
       CloseSubTile: "Click to close model settings",
     },
     Model: "Model",
+    StreamUsageEnable: {
+      Title: "Enable API Stream Usage Options",
+      SubTitle:
+        "Whether to enable native streaming usage statistics requires API support for the stream_options parameter; otherwise, statistics will be based on the default tiktoken.",
+    },
     CompressModel: {
       Title: "Summary Model",
       SubTitle: "Model used to compress history and generate title",
@@ -621,9 +641,20 @@ const en: LocaleType = {
     Less: "Fold Code",
     NotShow: "Never Show Again",
     ConfirmNoShow: "Confirm to disable？You can enable it in settings later.",
+    Searching: "Searching...",
+    Search: "Search Results",
+    NoSearch: "No Search Results",
+    SearchFormat: (SearchTime?: number) =>
+      SearchTime !== undefined
+        ? `(Search for ${Math.round(SearchTime / 1000)} s)`
+        : "",
     Thinking: "Thinking...",
     Think: "Content of Thought",
     NoThink: "No Thought",
+    ThinkFormat: (thinkingTime?: number) =>
+      thinkingTime !== undefined
+        ? `(Thinking for ${Math.round(thinkingTime / 1000)} s)`
+        : "",
     ArtifactsInfo:
       "You can enable/disable 'Artifacts Preview' and 'Code Fold' in settings. If the preview fails, please refresh the page.",
   },
@@ -640,6 +671,7 @@ const en: LocaleType = {
     Config: "Config",
     SearchModel: "Search Model",
     SelectALL: "All Models",
+    NoPresetRule: "No preset rules",
   },
   Exporter: {
     Description: {

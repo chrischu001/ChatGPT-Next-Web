@@ -19,14 +19,15 @@ import type {
   ClientApi,
   RequestMessage,
   MultimodalContent,
+  UploadFile,
 } from "../client/api";
 import { getClientApi } from "../client/api";
 import { ChatControllerPool } from "../client/controller";
 import { prettyObject } from "../utils/format";
-import { estimateTokenLength } from "../utils/token";
+import { estimateTokenLengthInLLM } from "../utils/token";
 import { nanoid } from "nanoid";
 import { createPersistStore } from "../utils/store";
-import { safeLocalStorage } from "../utils";
+import { safeLocalStorage, readFileContent } from "../utils";
 import { indexedDBStorage } from "@/app/utils/indexedDB-storage";
 import { useAccessStore } from "./access";
 import { ServiceProvider } from "../constant";
@@ -41,6 +42,15 @@ export type ChatMessage = RequestMessage & {
   model?: ModelType;
   displayName?: string;
   providerName?: string;
+
+  statistic?: {
+    completionTokens?: number;
+    reasoningTokens?: number;
+    firstReplyLatency?: number;
+    searchingLatency?: number;
+    reasoningLatency?: number;
+    totalReplyLatency?: number;
+  };
 };
 
 export function createMessage(override: Partial<ChatMessage>): ChatMessage {
@@ -127,7 +137,7 @@ function createTemplateRegex(output: string) {
 
 function countMessages(msgs: ChatMessage[]) {
   return msgs.reduce(
-    (pre, cur) => pre + estimateTokenLength(getMessageTextContent(cur)),
+    (pre, cur) => pre + estimateTokenLengthInLLM(getMessageTextContent(cur)),
     0,
   );
 }
@@ -358,7 +368,11 @@ export const useChatStore = createPersistStore(
         get().summarizeSession(false, targetSession);
       },
 
-      async onUserInput(content: string, attachImages?: string[]) {
+      async onUserInput(
+        content: string,
+        attachImages?: string[],
+        attachFiles?: UploadFile[],
+      ) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
 
@@ -366,8 +380,73 @@ export const useChatStore = createPersistStore(
         console.log("[User Input] after template: ", userContent);
 
         let mContent: string | MultimodalContent[] = userContent;
+        let displayContent: string | MultimodalContent[] = userContent;
+        displayContent = [
+          {
+            type: "text",
+            text: userContent,
+          },
+        ];
 
-        if (attachImages && attachImages.length > 0) {
+        if (attachFiles && attachFiles.length > 0) {
+          let fileContent = "";
+
+          // 处理每个文件，按照模板格式构建内容
+          // 遵循deepseek-ai推荐模板：https://github.com/deepseek-ai/DeepSeek-R1?tab=readme-ov-file#official-prompts
+          for (let i = 0; i < attachFiles.length; i++) {
+            let curFileContent = await readFileContent(attachFiles[i]);
+            if (curFileContent) {
+              fileContent += `[file name]: ${attachFiles[i].name}\n`;
+              fileContent += `[file content begin]\n`;
+              fileContent += curFileContent;
+              fileContent += `\n[file content end]\n`;
+            }
+          }
+          // 添加用户问题
+          fileContent += userContent;
+
+          mContent = [
+            {
+              type: "text",
+              text: fileContent,
+            },
+          ];
+          displayContent = displayContent.concat(
+            attachFiles.map((file) => {
+              return {
+                type: "file_url",
+                file_url: {
+                  url: file.url,
+                  name: file.name,
+                  tokenCount: file.tokenCount,
+                },
+              };
+            }),
+          );
+
+          if (attachImages && attachImages.length > 0) {
+            mContent = mContent.concat(
+              attachImages.map((url) => {
+                return {
+                  type: "image_url",
+                  image_url: {
+                    url: url,
+                  },
+                };
+              }),
+            );
+            displayContent = displayContent.concat(
+              attachImages.map((url) => {
+                return {
+                  type: "image_url",
+                  image_url: {
+                    url: url,
+                  },
+                };
+              }),
+            );
+          }
+        } else if (attachImages && attachImages.length > 0) {
           mContent = [
             {
               type: "text",
@@ -384,6 +463,19 @@ export const useChatStore = createPersistStore(
               };
             }),
           );
+          displayContent = displayContent.concat(
+            attachImages.map((url) => {
+              return {
+                type: "image_url",
+                image_url: {
+                  url: url,
+                },
+              };
+            }),
+          );
+        } else {
+          mContent = userContent;
+          displayContent = userContent;
         }
         let userMessage: ChatMessage = createMessage({
           role: "user",
@@ -406,7 +498,8 @@ export const useChatStore = createPersistStore(
         get().updateCurrentSession((session) => {
           const savedUserMessage = {
             ...userMessage,
-            content: mContent,
+            //content: mContent,
+            content: displayContent,
           };
           session.messages = session.messages.concat([
             savedUserMessage,
@@ -432,7 +525,23 @@ export const useChatStore = createPersistStore(
           onFinish(message) {
             botMessage.streaming = false;
             if (message) {
-              botMessage.content = message;
+              botMessage.content =
+                typeof message === "string" ? message : message.content;
+              if (typeof message !== "string") {
+                if (!botMessage.statistic) {
+                  botMessage.statistic = {};
+                }
+                botMessage.statistic.completionTokens =
+                  message?.usage?.completion_tokens;
+                botMessage.statistic.firstReplyLatency =
+                  message?.usage?.first_content_latency;
+                botMessage.statistic.totalReplyLatency =
+                  message?.usage?.total_latency;
+                botMessage.statistic.reasoningLatency =
+                  message?.usage?.thinking_time;
+                botMessage.statistic.searchingLatency =
+                  message?.usage?.searching_time;
+              }
               botMessage.date = new Date().toLocaleString();
               get().onNewMessage(botMessage, session);
             }
@@ -555,7 +664,7 @@ export const useChatStore = createPersistStore(
         ) {
           const msg = messages[i];
           if (!msg || msg.isError) continue;
-          tokenCount += estimateTokenLength(getMessageTextContent(msg));
+          tokenCount += estimateTokenLengthInLLM(getMessageTextContent(msg));
           reversedRecentMessages.push(msg);
         }
         // concat all messages
@@ -651,7 +760,9 @@ export const useChatStore = createPersistStore(
             },
             onFinish(message, responseRes) {
               if (responseRes?.status === 200) {
-                if (!isValidMessage(message)) {
+                let replyContent: string =
+                  typeof message === "string" ? message : message.content;
+                if (!isValidMessage(replyContent)) {
                   showToast(Locale.Chat.Actions.FailTitleToast);
                   return;
                 }
@@ -659,7 +770,9 @@ export const useChatStore = createPersistStore(
                   session,
                   (session) =>
                     (session.topic =
-                      message.length > 0 ? trimTopic(message) : DEFAULT_TOPIC),
+                      replyContent.length > 0
+                        ? trimTopic(replyContent)
+                        : DEFAULT_TOPIC),
                 );
               }
             },
@@ -731,12 +844,14 @@ export const useChatStore = createPersistStore(
             onFinish(message, responseRes) {
               if (responseRes?.status === 200) {
                 console.log("[Memory] ", message);
-                if (!isValidMessage(message)) {
+                let replyContent =
+                  typeof message === "string" ? message : message.content;
+                if (!isValidMessage(replyContent)) {
                   return;
                 }
                 get().updateTargetSession(session, (session) => {
                   session.lastSummarizeIndex = lastSummarizeIndex;
-                  session.memoryPrompt = message; // Update the memory prompt for stored it in local storage
+                  session.memoryPrompt = replyContent; // Update the memory prompt for stored it in local storage
                 });
               }
             },

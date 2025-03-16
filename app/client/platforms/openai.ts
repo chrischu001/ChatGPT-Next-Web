@@ -17,6 +17,7 @@ import {
   LLMUsage,
   MultimodalContent,
   SpeechOptions,
+  RichMessage,
 } from "../api";
 import Locale from "../../locales";
 import {
@@ -34,6 +35,7 @@ import {
   wrapThinkingPart,
 } from "@/app/utils";
 import { preProcessImageContent } from "@/app/utils/chat";
+import { estimateTokenLengthInLLM } from "@/app/utils/token";
 
 export interface OpenAIListModelResponse {
   object: string;
@@ -57,6 +59,9 @@ interface RequestPayload {
   top_p?: number;
   max_tokens?: number;
   max_completion_tokens?: number;
+  stream_options?: {
+    include_usage?: boolean;
+  };
 }
 
 export class ChatGPTApi implements LLMApi {
@@ -150,8 +155,12 @@ export class ChatGPTApi implements LLMApi {
   async chat(options: ChatOptions) {
     const visionModel = isVisionModel(options.config.model);
     const model_name = options.config.model.toLowerCase();
+    const isPureGPT =
+      model_name.startsWith("gpt-") || model_name.startsWith("chatgpt-");
     const isO1 = model_name.startsWith("o1") || model_name.startsWith("gpt-o1");
     const isO3 = model_name.startsWith("o3") || model_name.startsWith("gpt-o3");
+    const isGPT = isPureGPT || isO1 || isO3;
+    const isClaude = model_name.startsWith("claude");
     const isGlm4v = model_name.startsWith("glm-4v");
     const isMistral = model_name.startsWith("mistral");
     const isMiniMax = model_name.startsWith("aabb");
@@ -176,7 +185,7 @@ export class ChatGPTApi implements LLMApi {
 
     // For claude model: roles must alternate between "user" and "assistant" in claude, so add a fake assistant message between two user messages
     const keys = ["system", "user"];
-    if (options.config.model.includes("claude")) {
+    if (isClaude) {
       // 新的处理方式
       // 忽略所有不是 user 或 system 的开头消息
       while (
@@ -241,6 +250,13 @@ export class ChatGPTApi implements LLMApi {
       // temperature: !isO1 ? modelConfig.temperature : 1,
       // top_p: !isO1 ? modelConfig.top_p : 1,
     };
+    if (
+      modelConfig.enableStreamUsageOptions &&
+      options.config.stream &&
+      isGPT
+    ) {
+      requestPayload["stream_options"] = { include_usage: true };
+    }
     if (!isDeepseekReasoner) {
       if (modelConfig.temperature_enabled) {
         requestPayload["temperature"] = !isO1 ? modelConfig.temperature : 1;
@@ -310,9 +326,20 @@ export class ChatGPTApi implements LLMApi {
         let responseText = "";
         let remainText = "";
         let finished = false;
+        let isInSearching = false;
+        let searchLatency = 0;
         let isInThinking = false;
-        let thinkingStartTime = 0;
-        let totalThinkingTime = 0;
+        let foundFirstNonEmptyLineOrNonReference = false;
+        let totalThinkingLatency = 0;
+        let startRequestTime = Date.now();
+        let isFirstReply = false;
+        let firstReplyLatency = 0;
+        let totalReplyLatency = 0;
+        let completionTokens = 0;
+        let richMessage: RichMessage = {
+          content: "",
+          reasoning_content: "",
+        };
 
         // animate response to make it looks smooth
         function animateResponseText() {
@@ -342,13 +369,26 @@ export class ChatGPTApi implements LLMApi {
         const finish = () => {
           if (!finished) {
             finished = true;
-            if (isInThinking) {
-              const finalThinkingDuration = Date.now() - thinkingStartTime;
-              totalThinkingTime += finalThinkingDuration;
+            if (isInThinking || !totalThinkingLatency) {
+              totalThinkingLatency =
+                Date.now() - startRequestTime - firstReplyLatency;
             }
+            totalReplyLatency = Date.now() - startRequestTime;
             let full_reply = responseText + remainText;
             full_reply = wrapThinkingPart(full_reply);
-            options.onFinish(full_reply, new Response(null, { status: 200 }));
+            if (completionTokens == 0) {
+              completionTokens = estimateTokenLengthInLLM(full_reply);
+            }
+            richMessage.content = full_reply;
+            richMessage.usage = {
+              completion_tokens: completionTokens,
+              first_content_latency: firstReplyLatency,
+              searching_time: searchLatency,
+              thinking_time: totalThinkingLatency,
+              total_latency: totalReplyLatency,
+            };
+
+            options.onFinish(richMessage, new Response(null, { status: 200 }));
           }
         };
 
@@ -412,24 +452,69 @@ export class ChatGPTApi implements LLMApi {
               const reasoning = choices[0]?.delta?.reasoning_content;
               const content = choices[0]?.delta?.content;
               const textmoderation = json?.prompt_filter_results;
+              completionTokens =
+                json?.usage?.completion_tokens || completionTokens;
 
+              if (firstReplyLatency == 0) {
+                firstReplyLatency = Date.now() - startRequestTime;
+                isFirstReply = true;
+              } else {
+                isFirstReply = false;
+              }
               if (reasoning && reasoning.length > 0) {
                 if (!isInThinking) {
-                  thinkingStartTime = Date.now();
                   isInThinking = true;
                   remainText += "<think>\n" + reasoning;
                 } else {
                   remainText += reasoning;
                 }
                 isInThinking = true;
+                totalThinkingLatency =
+                  Date.now() - startRequestTime - firstReplyLatency;
               } else if (content && content.length > 0) {
+                if (isFirstReply && content.startsWith("<search>")) {
+                  isInSearching = true;
+                }
+                if (isInSearching && content.includes("</search>")) {
+                  isInSearching = false;
+                  searchLatency =
+                    Date.now() - startRequestTime - firstReplyLatency;
+                }
                 if (isInThinking) {
                   isInThinking = false;
-                  const thinkingDuration = Date.now() - thinkingStartTime;
-                  totalThinkingTime += thinkingDuration;
+                  totalThinkingLatency =
+                    Date.now() -
+                    startRequestTime -
+                    firstReplyLatency -
+                    searchLatency;
                   remainText += "\n</think>\n\n" + content;
                 } else {
                   remainText += content;
+                  // 检查是否遇到第一个非空且不以 '>' 开头的行
+                  if (
+                    !totalThinkingLatency &&
+                    !foundFirstNonEmptyLineOrNonReference
+                  ) {
+                    const lines = responseText.split("\n");
+                    for (const line of lines) {
+                      if (line.trim() !== "" && !line.startsWith(">")) {
+                        foundFirstNonEmptyLineOrNonReference = true;
+                        totalThinkingLatency =
+                          Date.now() -
+                          startRequestTime -
+                          firstReplyLatency -
+                          searchLatency;
+                        break;
+                      }
+                    }
+                  }
+                  if (content.includes("</think>")) {
+                    totalThinkingLatency =
+                      Date.now() -
+                      startRequestTime -
+                      firstReplyLatency -
+                      searchLatency;
+                  }
                 }
               }
 

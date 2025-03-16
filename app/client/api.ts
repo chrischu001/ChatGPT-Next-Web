@@ -16,11 +16,22 @@ export const TTSModels = ["tts-1", "tts-1-hd"] as const;
 export type ChatModel = ModelType;
 
 export interface MultimodalContent {
-  type: "text" | "image_url";
+  type: "text" | "image_url" | "file_url";
   text?: string;
   image_url?: {
     url: string;
   };
+  file_url?: {
+    url: string;
+    name: string;
+    tokenCount?: number;
+  };
+}
+
+export interface UploadFile {
+  name: string;
+  url: string;
+  tokenCount?: number;
 }
 
 export interface RequestMessage {
@@ -45,13 +56,25 @@ export interface SpeechOptions {
   speed?: number;
   onController?: (controller: AbortController) => void;
 }
-
+export interface RichMessage {
+  content: string;
+  reasoning_content: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    first_content_latency?: number;
+    thinking_time?: number;
+    searching_time?: number;
+    total_latency?: number;
+  };
+}
 export interface ChatOptions {
   messages: RequestMessage[];
   config: LLMConfig;
 
   onUpdate?: (message: string, chunk: string) => void;
-  onFinish: (message: string, responseRes: Response) => void;
+  onFinish: (message: string | RichMessage, responseRes: Response) => void;
   onError?: (err: Error) => void;
   onController?: (controller: AbortController) => void;
 }
@@ -182,8 +205,8 @@ export function getHeaders(ignoreHeaders: boolean = false) {
   const apiKey = isGoogle
     ? accessStore.googleApiKey
     : isAzure
-      ? accessStore.azureApiKey
-      : accessStore.openaiApiKey;
+    ? accessStore.azureApiKey
+    : accessStore.openaiApiKey;
   const clientConfig = getClientConfig();
   const makeBearer = (s: string) => `${isAzure ? "" : "Bearer "}${s.trim()}`;
   const validString = (x: string) => x && x.length > 0;

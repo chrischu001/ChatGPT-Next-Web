@@ -1,3 +1,4 @@
+import Title from "antd/es/skeleton/Title";
 import { ShortcutKeyModal } from "../components/chat";
 import { SearchChatPage } from "../components/search-chat";
 import { getClientConfig } from "../config/client";
@@ -119,17 +120,29 @@ const cn = {
         FailPrivacyToast: "本次打码失败，无权限或请检查模型设置后再次尝试",
         SuccessPrivacyToast: "本次打码已结束并替换输入内容",
       },
+      UploadFile: {
+        Title: "上传文本文件",
+        FileTooLarge: "暂不支持上传超过100k的文件",
+        TooManyFile: "超出可上传文件数量",
+        UnsupportedFileType: "不支持的文件类型",
+        FailToRead: "文件内容读取失败",
+        DuplicateFile: (filename: string) =>
+          `文件 "${filename}" 已存在，请勿重复上传`,
+      },
     },
     Rename: "重命名对话",
     Typing: "正在输入…",
-    Input: (submitKey: string) => {
+    Input: (submitKey: string, isMobileScreen: boolean = false) => {
+      if (isMobileScreen) {
+        return "/ 触发预设，: 触发命令\n输入你的问题...";
+      }
       var inputHints = `${submitKey} 发送`;
       if (submitKey === String(SubmitKey.Enter)) {
         inputHints += "，Shift + Enter 换行";
       }
       return (
         inputHints +
-        "，/ 触发补全，: 触发命令\nCtrl + Shift + ;  快速复制最后一个代码块\nCtrl + Shift + L 重新获取 AI 回复"
+        "\n/ 触发预设，: 触发命令\nCtrl + Shift + ;  快速复制最后一个代码块\nCtrl + Shift + L 重新获取 AI 回复"
       );
     },
     Send: "发送",
@@ -452,6 +465,11 @@ const cn = {
       CloseSubTile: "收起对话模型设置",
     },
     Model: "模型 (model)",
+    StreamUsageEnable: {
+      Title: "开启原生流式用量统计",
+      SubTitle:
+        "是否开启原生流式用量统计，需要 api 支持 stream_options 参数，否则按照默认编码器进行统计",
+    },
     CompressModel: {
       Title: "对话摘要模型",
       SubTitle: "用于压缩历史记录、生成对话标题的模型",
@@ -611,9 +629,20 @@ const cn = {
     SubTitle: "现在开始，与面具背后的灵魂思维碰撞",
     More: "查看全部",
     Less: "折叠代码",
+    Searching: "搜索中...",
+    Search: "搜索内容",
+    NoSearch: "没有搜索内容",
+    SearchFormat: (SearchTime?: number) =>
+      SearchTime !== undefined
+        ? `（用时 ${Math.round(SearchTime / 1000)} 秒）`
+        : "",
     Thinking: "正在思考中...",
     Think: "思考过程",
     NoThink: "没有思考过程",
+    ThinkFormat: (thinkingTime?: number) =>
+      thinkingTime !== undefined
+        ? `（用时 ${Math.round(thinkingTime / 1000)} 秒）`
+        : "",
     ArtifactsInfo:
       "可在设置中开启/关闭“Artifacts 预览”和“代码折叠”，若预览失败请刷新页面",
   },
@@ -635,6 +664,7 @@ const cn = {
     Config: "配置",
     SearchModel: "搜索模型",
     SelectALL: "所有模型",
+    NoPresetRule: "未预置规则",
   },
   Exporter: {
     Description: {
