@@ -6,6 +6,8 @@ import {
   OpenaiPath,
   REQUEST_TIMEOUT_MS,
   ServiceProvider,
+  ThinkingType,
+  ThinkingTypeMap,
 } from "@/app/constant";
 import { useAccessStore, useAppConfig, useChatStore } from "@/app/store";
 
@@ -34,7 +36,10 @@ import {
   isThinkingModel,
   wrapThinkingPart,
 } from "@/app/utils";
-import { preProcessImageContent } from "@/app/utils/chat";
+import {
+  preProcessImageContent,
+  preProcessMultimodalContent,
+} from "@/app/utils/chat";
 import { estimateTokenLengthInLLM } from "@/app/utils/token";
 
 export interface OpenAIListModelResponse {
@@ -159,6 +164,7 @@ export class ChatGPTApi implements LLMApi {
       model_name.startsWith("gpt-") || model_name.startsWith("chatgpt-");
     const isO1 = model_name.startsWith("o1") || model_name.startsWith("gpt-o1");
     const isO3 = model_name.startsWith("o3") || model_name.startsWith("gpt-o3");
+    const isO1orO3 = isO1 || isO3;
     const isGPT = isPureGPT || isO1 || isO3;
     const isClaude = model_name.startsWith("claude");
     const isGlm4v = model_name.startsWith("glm-4v");
@@ -174,12 +180,8 @@ export class ChatGPTApi implements LLMApi {
 
     const messages: ChatOptions["messages"] = [];
     for (const v of options.messages) {
-      const content = visionModel
-        ? await preProcessImageContent(v)
-        : v.role === "assistant" // 如果 role 是 assistant
-        ? getMessageTextContentWithoutThinking(v) // 调用 getMessageTextContentWithoutThinking
-        : getMessageTextContent(v); // 否则调用 getMessageTextContent
-      if (!(isO1 && v.role === "system"))
+      const content = await preProcessMultimodalContent(v);
+      if (!(isO1orO3 && v.role === "system"))
         messages.push({ role: v.role, content });
     }
 
@@ -325,10 +327,15 @@ export class ChatGPTApi implements LLMApi {
       if (shouldStream) {
         let responseText = "";
         let remainText = "";
+        let searchContent = "";
+        let thinkContent = "";
+        let completionContent = "";
+
         let finished = false;
         let isInSearching = false;
         let searchLatency = 0;
         let isInThinking = false;
+        let thinkingType = ThinkingType.Unknown; // 0: reasoning_content, 1: <think> 类型, 2: > 引用类型
         let foundFirstNonEmptyLineOrNonReference = false;
         let totalThinkingLatency = 0;
         let startRequestTime = Date.now();
@@ -367,13 +374,19 @@ export class ChatGPTApi implements LLMApi {
         animateResponseText();
 
         const finish = () => {
-          if (!finished) {
+          if (!finished || controller.signal.aborted) {
             finished = true;
             if (isInThinking || !totalThinkingLatency) {
               totalThinkingLatency =
-                Date.now() - startRequestTime - firstReplyLatency;
+                Date.now() -
+                startRequestTime -
+                firstReplyLatency -
+                searchLatency;
             }
-            totalReplyLatency = Date.now() - startRequestTime;
+            if (!totalReplyLatency) {
+              totalReplyLatency = Date.now() - startRequestTime;
+            }
+
             let full_reply = responseText + remainText;
             full_reply = wrapThinkingPart(full_reply);
             if (completionTokens == 0) {
@@ -387,8 +400,11 @@ export class ChatGPTApi implements LLMApi {
               thinking_time: totalThinkingLatency,
               total_latency: totalReplyLatency,
             };
-
             options.onFinish(richMessage, new Response(null, { status: 200 }));
+            console.log("thinkingType: ", ThinkingTypeMap[thinkingType]);
+            console.log(
+              `[Latency] ft: ${firstReplyLatency}, st: ${searchLatency}, tt: ${totalThinkingLatency}, rt: ${totalReplyLatency}`,
+            );
           }
         };
 
@@ -446,10 +462,13 @@ export class ChatGPTApi implements LLMApi {
               const choices = json.choices as Array<{
                 delta: {
                   content: string | null;
-                  reasoning_content: string | null;
+                  reasoning_content: string | null; // 兼容 deepseek 字段
+                  reasoning: string | null; // 兼容 openRouter 字段
                 };
               }>;
-              const reasoning = choices[0]?.delta?.reasoning_content;
+              const reasoning =
+                choices[0]?.delta?.reasoning_content ||
+                choices[0]?.delta?.reasoning;
               const content = choices[0]?.delta?.content;
               const textmoderation = json?.prompt_filter_results;
               completionTokens =
@@ -462,6 +481,8 @@ export class ChatGPTApi implements LLMApi {
                 isFirstReply = false;
               }
               if (reasoning && reasoning.length > 0) {
+                // 存在非空的 reasoning_content => reasoningType
+                thinkingType = ThinkingType.ReasoningType;
                 if (!isInThinking) {
                   isInThinking = true;
                   remainText += "<think>\n" + reasoning;
@@ -470,51 +491,114 @@ export class ChatGPTApi implements LLMApi {
                 }
                 isInThinking = true;
                 totalThinkingLatency =
-                  Date.now() - startRequestTime - firstReplyLatency;
+                  Date.now() -
+                  startRequestTime -
+                  firstReplyLatency -
+                  searchLatency;
               } else if (content && content.length > 0) {
-                if (isFirstReply && content.startsWith("<search>")) {
-                  isInSearching = true;
-                }
-                if (isInSearching && content.includes("</search>")) {
-                  isInSearching = false;
-                  searchLatency =
-                    Date.now() - startRequestTime - firstReplyLatency;
-                }
-                if (isInThinking) {
+                // 先接收 content，再处理各种计时和状态标记
+                if (
+                  isInThinking &&
+                  thinkingType === ThinkingType.ReasoningType
+                ) {
+                  remainText += "\n</think>\n\n" + content;
                   isInThinking = false;
                   totalThinkingLatency =
                     Date.now() -
                     startRequestTime -
                     firstReplyLatency -
                     searchLatency;
-                  remainText += "\n</think>\n\n" + content;
                 } else {
                   remainText += content;
-                  // 检查是否遇到第一个非空且不以 '>' 开头的行
+                }
+                let response_content = (responseText + remainText).trimStart();
+                // 标记搜索状态
+                if (!searchLatency) {
                   if (
-                    !totalThinkingLatency &&
-                    !foundFirstNonEmptyLineOrNonReference
+                    !isInSearching &&
+                    response_content.startsWith("<search>")
                   ) {
-                    const lines = responseText.split("\n");
-                    for (const line of lines) {
-                      if (line.trim() !== "" && !line.startsWith(">")) {
-                        foundFirstNonEmptyLineOrNonReference = true;
-                        totalThinkingLatency =
-                          Date.now() -
-                          startRequestTime -
-                          firstReplyLatency -
-                          searchLatency;
-                        break;
+                    isInSearching = true;
+                  }
+                  if (isInSearching && response_content.includes("</search>")) {
+                    const match_search = response_content.match(
+                      /^<search>[\s\S]*?<\/search>/,
+                    );
+                    searchContent = match_search ? match_search[0] : "";
+                    isInSearching = false;
+                    searchLatency =
+                      Date.now() - startRequestTime - firstReplyLatency;
+                  }
+                }
+                response_content = response_content
+                  .replace(/^<search>[\s\S]*?<\/search>/, "")
+                  .trimStart();
+
+                if ((searchLatency || !isInSearching) && response_content) {
+                  // 标记思考状态
+                  // 1. 标记思考类型
+                  if (thinkingType === ThinkingType.Unknown && !isInThinking) {
+                    if (response_content.startsWith("<think>")) {
+                      isInThinking = true;
+                      thinkingType = ThinkingType.ThinkType;
+                    } else if (response_content.startsWith(">")) {
+                      isInThinking = true;
+                      foundFirstNonEmptyLineOrNonReference = false;
+                      thinkingType = ThinkingType.ReferenceType;
+                    } else if (!response_content.startsWith("<")) {
+                      thinkingType = ThinkingType.MaybeNotThink;
+                      foundFirstNonEmptyLineOrNonReference = true; //首字非<think>、非空、非引用
+                    }
+                  }
+
+                  // 2. 处理闭合思考计时
+                  if (isInThinking || !totalThinkingLatency) {
+                    if (isInThinking) {
+                      thinkContent = response_content;
+                    }
+                    // think类型，检测闭合</think>标签
+                    if (
+                      (thinkingType === ThinkingType.ThinkType ||
+                        thinkingType === ThinkingType.MaybeNotThink) &&
+                      content.includes("</think>")
+                    ) {
+                      isInThinking = false;
+                      const match_think =
+                        response_content.match(/[\s\S]*?<\/think>/);
+                      thinkContent = match_think ? match_think[0] : "";
+                      totalThinkingLatency =
+                        Date.now() -
+                        startRequestTime -
+                        firstReplyLatency -
+                        searchLatency;
+                    }
+                    // 引用类型，检测非空&非引用行
+                    else if (
+                      thinkingType === ThinkingType.ReferenceType &&
+                      !foundFirstNonEmptyLineOrNonReference
+                    ) {
+                      const lines = response_content.split("\n");
+                      for (const line of lines) {
+                        if (line.trim() !== "" && !line.startsWith(">")) {
+                          isInThinking = false;
+                          foundFirstNonEmptyLineOrNonReference = true;
+                          totalThinkingLatency =
+                            Date.now() -
+                            startRequestTime -
+                            firstReplyLatency -
+                            searchLatency;
+                          break;
+                        }
+                        thinkContent += line + "\n";
+                      }
+                      if (isInThinking) {
+                        thinkContent = "";
                       }
                     }
                   }
-                  if (content.includes("</think>")) {
-                    totalThinkingLatency =
-                      Date.now() -
-                      startRequestTime -
-                      firstReplyLatency -
-                      searchLatency;
-                  }
+                  completionContent = response_content
+                    .replace(searchContent, "")
+                    .replace(thinkContent, "");
                 }
               }
 

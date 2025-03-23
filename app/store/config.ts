@@ -54,7 +54,7 @@ export const DEFAULT_CONFIG = {
 
   disablePromptHint: false,
 
-  dontShowMaskSplashScreen: false, // dont show splash screen when create chat
+  dontShowMaskSplashScreen: true, // dont show splash screen when create chat
   hideBuiltinMasks: false, // dont add builtin masks
 
   customModels: "",
@@ -88,7 +88,7 @@ export const DEFAULT_CONFIG = {
   },
 
   ttsConfig: {
-    enable: true,
+    enable: false,
     autoplay: false,
     engine: DEFAULT_TTS_ENGINE,
     model: DEFAULT_TTS_MODEL,
@@ -144,10 +144,10 @@ export const ModalConfigValidator = {
     return limitNumber(x, -2, 2, 0);
   },
   temperature(x: number) {
-    return limitNumber(x, 0, 2, 1);
+    return limitNumber(x, 0, 2, 0.6);
   },
   top_p(x: number) {
-    return limitNumber(x, 0, 1, 1);
+    return limitNumber(x, 0, 2, 0.99);
   },
 };
 
@@ -215,7 +215,7 @@ export const useAppConfig = createPersistStore(
         state.modelConfig.frequency_penalty = 0;
         state.modelConfig.top_p = 1;
         state.modelConfig.template = DEFAULT_INPUT_TEMPLATE;
-        state.dontShowMaskSplashScreen = false;
+        state.dontShowMaskSplashScreen = true;
         state.hideBuiltinMasks = false;
       }
 
@@ -239,7 +239,7 @@ export const useAppConfig = createPersistStore(
         state.modelConfig.template =
           state.modelConfig.template !== DEFAULT_INPUT_TEMPLATE
             ? state.modelConfig.template
-            : (config?.template ?? DEFAULT_INPUT_TEMPLATE);
+            : config?.template ?? DEFAULT_INPUT_TEMPLATE;
       }
 
       if (version < 4) {

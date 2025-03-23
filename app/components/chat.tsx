@@ -114,6 +114,10 @@ import {
   REQUEST_TIMEOUT_MS,
   UNFINISHED_INPUT,
   ServiceProvider,
+  MAX_DOC_CNT,
+  textFileExtensions,
+  maxFileSizeInKB,
+  minTokensForPastingAsFile,
 } from "../constant";
 import { Avatar } from "./emoji";
 import { ContextPrompts, MaskAvatar, MaskConfig } from "./mask";
@@ -374,17 +378,20 @@ export function PromptHints(props: {
   );
 }
 
-function ClearContextDivider() {
+// function ClearContextDivider() {
+function ClearContextDivider(props: { index: number }) {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
   return (
     <div
       className={styles["clear-context"]}
       onClick={() =>
-        chatStore.updateTargetSession(
-          session,
-          (session) => (session.clearContextIndex = undefined),
-        )
+        chatStore.updateTargetSession(session, (session) => {
+          session.clearContextIndex = undefined;
+          if (props.index > 0) {
+            session.messages[props.index - 1].beClear = false;
+          }
+        })
       }
     >
       <div className={styles["clear-context-tips"]}>{Locale.Context.Clear}</div>
@@ -866,11 +873,17 @@ export function ChatActions(props: {
           icon={<BreakIcon />}
           onClick={() => {
             chatStore.updateTargetSession(session, (session) => {
-              if (session.clearContextIndex === session.messages.length) {
-                session.clearContextIndex = undefined;
-              } else {
-                session.clearContextIndex = session.messages.length;
-                session.memoryPrompt = ""; // will clear memory
+              // 找到最后一条消息
+              const lastMessage = session.messages[session.messages.length - 1];
+              if (lastMessage) {
+                if (lastMessage?.beClear) {
+                  session.clearContextIndex = undefined;
+                  lastMessage.beClear = false;
+                } else {
+                  session.clearContextIndex = session.messages.length;
+                  lastMessage.beClear = true;
+                  session.memoryPrompt = ""; // 清除记忆提示
+                }
               }
             });
           }}
@@ -1116,6 +1129,7 @@ function ChatInputActions(props: {
   onUserStop: (messageId: string) => void;
   onResend: (message: any) => void;
   onDelete: (msgId: string) => void;
+  onBreak: (msgId: string) => void;
   onPinMessage: (message: any) => void;
   copyToClipboard: (text: string) => void;
   openaiSpeech: (text: string) => void;
@@ -1129,6 +1143,7 @@ function ChatInputActions(props: {
     onUserStop,
     onResend,
     onDelete,
+    onBreak,
     onPinMessage,
     copyToClipboard,
     openaiSpeech,
@@ -1186,6 +1201,11 @@ function ChatInputActions(props: {
             icon={<EditToInputIcon />}
             onClick={() => setUserInput(getMessageTextContent(message))}
           />
+          <ChatAction
+            text={Locale.Chat.InputActions.Clear}
+            icon={<BreakIcon />}
+            onClick={() => onBreak(message.id ?? i)}
+          />
         </>
       )}
     </div>
@@ -1238,6 +1258,14 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
   const [attachImages, setAttachImages] = useState<string[]>([]);
   const [attachFiles, setAttachFiles] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [renameAttachFile, setRenameAttachFile] = useState<{
+    index: number;
+    name: string;
+  } | null>(null);
+
+  const [showModelAtSelector, setShowModelAtSelector] = useState(false); // 是否显示@
+  const [modelAtQuery, setModelAtQuery] = useState(""); // 模型选择器的搜索字符
+  const [modelAtSelectIndex, setModelAtSelectIndex] = useState(0); // 当前选中模型的索引
 
   // prompt hints
   const promptStore = usePromptStore();
@@ -1323,10 +1351,10 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     },
     resend: () => onResend(session.messages[session.messages.length - 1]),
     clear: () =>
-      chatStore.updateTargetSession(
-        session,
-        (session) => (session.clearContextIndex = session.messages.length),
-      ),
+      chatStore.updateTargetSession(session, (session) => {
+        session.clearContextIndex = session.messages.length;
+        session.messages[session.messages.length - 1].beClear = true;
+      }),
     new: () => chatStore.newSession(),
     search: () => navigate(Path.SearchChat),
     newm: () => navigate(Path.NewChat),
@@ -1342,6 +1370,16 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     setUserInput(text);
     const n = text.trim().length;
 
+    // const atMatch = text.match(/^@([\w-]*)$/); // 完整匹配 @ 后面任意单词或短线
+    const atMatch = text.match(/^@(\S*)$/); // 完整匹配 @ 后面非空字符
+    if (!isMobileScreen && atMatch) {
+      setModelAtQuery(atMatch[1]);
+      setShowModelAtSelector(true);
+      setModelAtSelectIndex(0);
+    } else {
+      setShowModelAtSelector(false);
+    }
+
     // clear search results
     if (n === 0) {
       setPromptHints([]);
@@ -1355,6 +1393,15 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       }
     }
   };
+
+  useEffect(() => {
+    if (selectedRef.current) {
+      selectedRef.current.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
+    }
+  }, [modelAtSelectIndex, modelAtQuery, showModelAtSelector]);
 
   const doSubmit = (userInput: string) => {
     if (userInput.trim() === "" && isEmpty(attachImages)) return;
@@ -1429,8 +1476,79 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
+  const formatModelItem = (model: Model) => ({
+    title:
+      model?.provider?.providerName?.toLowerCase() === "openai"
+        ? `${model.displayName || model.name}`
+        : `${model.displayName || model.name} (${model?.provider
+            ?.providerName})`,
+    subTitle: model.description,
+    value: `${model.name}@${model?.provider?.providerName}`,
+    model: model, // 保存原始模型对象，方便后续使用
+  });
+  // 修改过滤逻辑
+  const getFilteredModels = () => {
+    const query = modelAtQuery.toLowerCase();
+    return modelTable
+      .filter((model) => {
+        // 使用与 SearchSelector 相同的过滤逻辑
+        const formattedItem = formatModelItem(model);
+        return (
+          formattedItem.title.toLowerCase().includes(query) ||
+          (formattedItem.subTitle &&
+            formattedItem.subTitle.toLowerCase().includes(query)) ||
+          model.name.toLowerCase().includes(query) ||
+          (model.provider?.providerName &&
+            model.provider.providerName.toLowerCase().includes(query))
+        );
+      })
+      .map(formatModelItem);
+  };
+  const selectedRef = useRef<HTMLDivElement>(null); //引用当前所选项
   // check if should send message
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showModelAtSelector) {
+      const filteredModels = getFilteredModels();
+
+      const changeIndex = (delta: number) => {
+        e.preventDefault();
+        setModelAtSelectIndex((prev) => {
+          const newIndex = Math.max(
+            0,
+            Math.min(prev + delta, filteredModels.length - 1),
+          );
+          return newIndex;
+        });
+      };
+
+      if (e.key === "ArrowUp") {
+        changeIndex(-1);
+      } else if (e.key === "ArrowDown") {
+        changeIndex(1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const selectedItem = filteredModels[modelAtSelectIndex];
+        if (selectedItem) {
+          // 解析 value 字符串，获取模型名称和提供商
+          const [modelName, providerName] =
+            selectedItem.value.split(/@(?=[^@]*$)/);
+
+          chatStore.updateTargetSession(session, (session) => {
+            session.mask.modelConfig.model = modelName as ModelType;
+            session.mask.modelConfig.providerName =
+              providerName as ServiceProvider;
+            session.mask.syncGlobalConfig = false;
+          });
+          setUserInput("");
+          setShowModelAtSelector(false);
+          showToast(modelName);
+        }
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        setShowModelAtSelector(false);
+      }
+      return;
+    }
     // if ArrowUp and no userInput, fill with last input
     if (
       e.key === "ArrowUp" &&
@@ -1467,6 +1585,15 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
 
   const onDelete = (msgId: string) => {
     deleteMessage(msgId);
+  };
+
+  const onBreak = (msgId: string) => {
+    chatStore.updateTargetSession(session, (session) => {
+      const msg = session.messages.find((m) => m.id === msgId);
+      if (msg) {
+        msg.beClear = true;
+      }
+    });
   };
 
   const onResend = (message: ChatMessage) => {
@@ -1521,6 +1648,8 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
           userAttachFiles.push({
             name: item.file_url.name,
             url: item.file_url.url,
+            contentType: item.file_url.contentType,
+            size: item.file_url.size,
             tokenCount: item.file_url.tokenCount,
           });
         }
@@ -1788,146 +1917,200 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 双击处理函数
+  const [cursorAtStart, setCursorAtStart] = useState(false);
+  const handleDoubleClick = () => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    if (cursorAtStart) {
+      // 如果光标在起点，则移动到结尾
+      textarea.setSelectionRange(userInput.length, userInput.length);
+      setCursorAtStart(false);
+      showToast(Locale.Chat.InputActions.MoveCursorToEnd);
+    } else {
+      // 如果光标不在起点，则移动到起点
+      textarea.setSelectionRange(0, 0);
+      setCursorAtStart(true);
+      showToast(Locale.Chat.InputActions.MoveCursorToStart);
+    }
+    // 保持焦点
+    textarea.focus();
+  };
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const currentModel = chatStore.currentSession().mask.modelConfig.model;
-      if (!isVisionModel(currentModel)) {
+      const canUploadImage = isVisionModel(currentModel);
+      const items = (event.clipboardData || window.clipboardData).items;
+
+      // 检查是否有文本内容
+      const textContent = event.clipboardData.getData("text");
+      const tokenCount: number = countTokens(textContent);
+      if (textContent && tokenCount > minTokensForPastingAsFile) {
+        event.preventDefault(); // 阻止默认粘贴行为
+
+        // 将大量文本转换为文件对象
+        // 生成唯一的文件名以避免重复
+        const timestamp = new Date().getTime();
+        const fileName = `pasted_text_${timestamp}.txt`;
+        const file = new File([textContent], fileName, { type: "text/plain" });
+        setUploading(true);
+
+        try {
+          const data = await uploadFileRemote(file);
+          const fileData: UploadFile = {
+            name: fileName,
+            url: data.content,
+            contentType: data.type,
+            size: parseFloat((file.size / 1024).toFixed(2)),
+            tokenCount: tokenCount,
+          };
+
+          // 限制文件大小:1M
+          if (fileData?.size && fileData?.size > maxFileSizeInKB) {
+            showToast(Locale.Chat.InputActions.UploadFile.FileTooLarge);
+            setUploading(false);
+            return;
+          }
+
+          if (data.content && tokenCount > 0) {
+            const newFiles = [...attachFiles, fileData];
+            // 检查文件数量限制
+            const MAX_DOC_CNT = 6;
+            if (newFiles.length > MAX_DOC_CNT) {
+              showToast(Locale.Chat.InputActions.UploadFile.TooManyFile);
+              newFiles.splice(MAX_DOC_CNT, newFiles.length - MAX_DOC_CNT);
+            }
+            setAttachFiles(newFiles);
+            showToast(
+              Locale.Chat.InputActions.UploadFile.TooManyTokenToPasteAsFile,
+            );
+          }
+        } catch (e) {
+          console.error("Error uploading file:", e);
+          showToast(String(e));
+        } finally {
+          setUploading(false);
+        }
+
         return;
       }
-      const items = (event.clipboardData || window.clipboardData).items;
       for (const item of items) {
-        if (item.kind === "file" && item.type.startsWith("image/")) {
+        if (item.kind === "file") {
           event.preventDefault();
           const file = item.getAsFile();
-          if (file) {
-            const images: string[] = [];
-            images.push(...attachImages);
-            images.push(
-              ...(await new Promise<string[]>((res, rej) => {
-                setUploading(true);
-                const imagesData: string[] = [];
-                uploadImageRemote(file)
-                  .then((dataUrl) => {
-                    imagesData.push(dataUrl);
-                    setUploading(false);
-                    res(imagesData);
-                  })
-                  .catch((e) => {
-                    setUploading(false);
-                    rej(e);
-                  });
-              })),
-            );
-            const imagesLength = images.length;
 
-            if (imagesLength > 3) {
-              images.splice(3, imagesLength - 3);
+          if (file) {
+            // 处理图片文件
+            if (item.type.startsWith("image/")) {
+              if (!canUploadImage) {
+                showToast(
+                  Locale.Chat.InputActions.UnsupportedModelForUploadImage,
+                );
+                continue;
+              }
+              const images: string[] = [];
+              images.push(...attachImages);
+              images.push(
+                ...(await new Promise<string[]>((res, rej) => {
+                  setUploading(true);
+                  const imagesData: string[] = [];
+                  uploadImageRemote(file)
+                    .then((dataUrl) => {
+                      imagesData.push(dataUrl);
+                      setUploading(false);
+                      res(imagesData);
+                    })
+                    .catch((e) => {
+                      setUploading(false);
+                      rej(e);
+                    });
+                })),
+              );
+              const imagesLength = images.length;
+
+              if (imagesLength > 3) {
+                images.splice(3, imagesLength - 3);
+              }
+              setAttachImages(images);
             }
-            setAttachImages(images);
+            // 处理文本文件
+            else {
+              // 检查是否是支持的文件类型
+              if (supportFileType(file.name)) {
+                setUploading(true);
+                try {
+                  const data = await uploadFileRemote(file);
+                  const tokenCount: number = countTokens(data.content);
+                  const fileData: UploadFile = {
+                    name: file.name,
+                    url: data.content,
+                    contentType: data.type,
+                    size: parseFloat((file.size / 1024).toFixed(2)),
+                    tokenCount: tokenCount,
+                  };
+
+                  // 限制文件大小:1M
+                  if (fileData?.size && fileData?.size > maxFileSizeInKB) {
+                    showToast(Locale.Chat.InputActions.UploadFile.FileTooLarge);
+                    setUploading(false);
+                    return;
+                  }
+
+                  // 检查重复文件
+                  const isDuplicate = attachFiles.some(
+                    (existingFile) =>
+                      existingFile.name === fileData.name &&
+                      existingFile.url === fileData.url,
+                  );
+
+                  if (isDuplicate) {
+                    showToast(
+                      Locale.Chat.InputActions.UploadFile.DuplicateFile(
+                        file.name,
+                      ),
+                    );
+                    setUploading(false);
+                    return;
+                  }
+
+                  if (data.content && tokenCount > 0) {
+                    const newFiles = [...attachFiles, fileData];
+                    // 检查文件数量限制
+                    const MAX_DOC_CNT = 6;
+                    if (newFiles.length > MAX_DOC_CNT) {
+                      showToast(
+                        Locale.Chat.InputActions.UploadFile.TooManyFile,
+                      );
+                      newFiles.splice(
+                        MAX_DOC_CNT,
+                        newFiles.length - MAX_DOC_CNT,
+                      );
+                    }
+                    setAttachFiles(newFiles);
+                  }
+                } catch (e) {
+                  console.error("Error uploading file:", e);
+                  showToast(String(e));
+                } finally {
+                  setUploading(false);
+                }
+              }
+            }
           }
         }
       }
     },
-    [attachImages, chatStore],
+    [attachImages, attachFiles, chatStore],
   );
 
+  function supportFileType(filename: string) {
+    // 获取文件扩展名
+    const fileExtension = filename.split(".").pop()?.toLowerCase();
+    return fileExtension && textFileExtensions.includes(fileExtension);
+  }
   async function uploadDocument() {
     const files: UploadFile[] = [...attachFiles];
 
-    const MAX_DOC_CNT = 6;
-    const textFileExtensions = [
-      "txt",
-      "md",
-      "markdown",
-      "json",
-      "csv",
-      "tsv",
-      "xml",
-      "html",
-      "htm",
-      "css",
-      "js",
-      "ts",
-      "jsx",
-      "tsx",
-      "py",
-      "java",
-      "c",
-      "cpp",
-      "h",
-      "cs",
-      "php",
-      "rb",
-      "go",
-      "rs",
-      "swift",
-      "kt",
-      "sql",
-      "yaml",
-      "yml",
-      "toml",
-      "ini",
-      "cfg",
-      "conf",
-      "log",
-      "sh",
-      "bat",
-      "ps1",
-      "tex",
-      "rtf",
-      "scss",
-      "sass",
-      "less", // CSS预处理器
-      "vue",
-      "svelte", // 前端框架文件
-      "graphql",
-      "gql", // GraphQL
-      "r",
-      "pl",
-      "pm", // R语言、Perl
-      "lua",
-      "groovy",
-      "scala", // 其他编程语言
-      "dart",
-      "haskell",
-      "hs", // Dart、Haskell
-      "clj",
-      "erl",
-      "ex",
-      "exs", // Clojure、Erlang、Elixir
-      "jsp",
-      "asp",
-      "aspx", // 服务器页面
-      "pug",
-      "jade",
-      "ejs", // 模板引擎
-      "diff",
-      "patch", // 差异文件
-      "properties",
-      "env", // 配置文件
-      "plist",
-      "proto", // 特定格式配置
-      "gradle",
-      "rake", // 构建系统
-      "htaccess",
-      "htpasswd", // Apache配置
-      "dockerfile",
-      "dockerignore", // Docker相关
-      "gitignore",
-      "gitattributes", // Git相关
-      "eslintrc",
-      "prettierrc", // 代码规范配置
-      "babelrc",
-      "stylelintrc", // 工具配置
-      "cmake",
-      "makefile", // 构建配置
-      "vbs",
-      "vbe", // VBScript
-      "rst",
-      "adoc", // 其他标记语言
-      "srt",
-      "vtt", // 字幕文件
-    ];
     // 构建accept属性的值
     const acceptTypes = textFileExtensions.map((ext) => `.${ext}`).join(",");
 
@@ -1946,11 +2129,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
             for (let i = 0; i < inputFiles.length; i++) {
               const file = inputFiles[i];
               // 检查文件类型是否在允许列表中
-              const fileExtension = file.name.split(".").pop()?.toLowerCase();
-              if (
-                !fileExtension ||
-                !textFileExtensions.includes(fileExtension)
-              ) {
+              if (!supportFileType(file.name)) {
                 setUploading(false);
                 showToast(
                   Locale.Chat.InputActions.UploadFile.UnsupportedFileType,
@@ -1958,16 +2137,18 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                 return;
               }
               try {
-                const dataUrl = await uploadFileRemote(file);
-                const tokenCount: number = countTokens(dataUrl);
+                const data = await uploadFileRemote(file);
+                const tokenCount: number = countTokens(data.content);
                 const fileData: UploadFile = {
                   name: file.name,
-                  url: dataUrl,
+                  url: data.content,
+                  contentType: data.type,
+                  size: parseFloat((file.size / 1024).toFixed(2)),
                   tokenCount: tokenCount,
                 };
 
                 // 限制文件大小
-                if (tokenCount > 100) {
+                if (fileData?.size && fileData?.size > maxFileSizeInKB) {
                   showToast(Locale.Chat.InputActions.UploadFile.FileTooLarge);
                   setUploading(false);
                 } else {
@@ -1985,7 +2166,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                       ),
                     );
                     setUploading(false);
-                  } else if (dataUrl && tokenCount > 0) {
+                  } else if (data.content && tokenCount > 0) {
                     // 如果不是重复文件且有效，则添加到filesData
                     filesData.push(fileData);
                   }
@@ -2215,9 +2396,9 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
           >
             {!session.topic ? DEFAULT_TOPIC : session.topic}
           </div>
-          <div className="window-header-sub-title">
+          {/* <div className="window-header-sub-title">
             {Locale.Chat.SubTitle(session.messages.length)}
-          </div>
+          </div> */}
         </div>
         <div className="window-actions">
           <div className="window-action-button">
@@ -2295,8 +2476,8 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
             !isContext;
           const showTyping = message.preview || message.streaming;
 
-          const shouldShowClearContextDivider = i === clearContextIndex - 1;
-
+          const shouldShowClearContextDivider =
+            i === clearContextIndex - 1 || message?.beClear === true;
           return (
             <Fragment key={message.id}>
               <div
@@ -2350,11 +2531,14 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                                     item.type === "file_url" &&
                                     item.file_url
                                   ) {
+                                    console.log("edit file_url", item);
                                     (newContent as MultimodalContent[]).push({
                                       type: "file_url",
                                       file_url: {
                                         url: item.file_url.url,
                                         name: item.file_url.name,
+                                        contentType: item.file_url.contentType,
+                                        size: item.file_url.size,
                                         tokenCount: item.file_url.tokenCount,
                                       },
                                     });
@@ -2412,6 +2596,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                             onUserStop={onUserStop}
                             onResend={onResend}
                             onDelete={onDelete}
+                            onBreak={onBreak}
                             onPinMessage={onPinMessage}
                             copyToClipboard={copyToClipboard}
                             openaiSpeech={openaiSpeech}
@@ -2499,8 +2684,6 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                           const style = defaultStyles[extension];
                           return (
                             <a
-                              href={file.url}
-                              target="_blank"
                               key={index}
                               className={styles["chat-message-item-file"]}
                             >
@@ -2517,7 +2700,10 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                                   styles["chat-message-item-file-name"]
                                 }
                               >
-                                {file.name} ({file.tokenCount}K)
+                                {file.name}{" "}
+                                {file?.size !== undefined
+                                  ? `(${file.size}K, ${file.tokenCount}Tokens)`
+                                  : `(${file.tokenCount}K)`}
                               </div>
                             </a>
                           );
@@ -2537,6 +2723,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                           onUserStop={onUserStop}
                           onResend={onResend}
                           onDelete={onDelete}
+                          onBreak={onBreak}
                           onPinMessage={onPinMessage}
                           copyToClipboard={copyToClipboard}
                           openaiSpeech={openaiSpeech}
@@ -2550,7 +2737,9 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                   )}
                 </div>
               </div>
-              {shouldShowClearContextDivider && <ClearContextDivider />}
+              {shouldShowClearContextDivider && (
+                <ClearContextDivider index={i} />
+              )}
             </Fragment>
           );
         })}
@@ -2559,6 +2748,68 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       <div className={styles["chat-input-panel"]}>
         <PromptHints prompts={promptHints} onPromptSelect={onPromptSelect} />
 
+        {showModelAtSelector && (
+          <div className={styles["model-selector"]}>
+            <div className={styles["model-selector-title"]}>
+              <span>
+                {Locale.Chat.InputActions.ModelAtSelector.SelectModel}
+              </span>
+              <span className={styles["model-selector-count"]}>
+                {Locale.Chat.InputActions.ModelAtSelector.AvailableModels(
+                  getFilteredModels().length,
+                )}
+              </span>
+            </div>
+
+            {getFilteredModels().length === 0 ? (
+              <div className={styles["model-selector-empty"]}>
+                {Locale.Chat.InputActions.ModelAtSelector.NoAvailableModels}
+              </div>
+            ) : (
+              getFilteredModels().map((item, index) => {
+                const selected = modelAtSelectIndex === index;
+                const [modelName, providerName] =
+                  item.value.split(/@(?=[^@]*$)/);
+
+                return (
+                  <div
+                    ref={selected ? selectedRef : null}
+                    key={item.value}
+                    className={`${styles["model-selector-item"]} ${
+                      selected ? styles["model-selector-item-selected"] : ""
+                    }`}
+                    onMouseEnter={() => setModelAtSelectIndex(index)}
+                    onClick={() => {
+                      chatStore.updateTargetSession(session, (session) => {
+                        session.mask.modelConfig.model = modelName as ModelType;
+                        session.mask.modelConfig.providerName =
+                          providerName as ServiceProvider;
+                        session.mask.syncGlobalConfig = false;
+                      });
+                      setUserInput("");
+                      setShowModelAtSelector(false);
+                      showToast(modelName);
+                    }}
+                  >
+                    <div className={styles["item-header"]}>
+                      <div className={styles["item-icon"]}>
+                        <Avatar model={item.title as string} />
+                      </div>
+                      <div className={styles["item-title"]}>
+                        {item.title.split(" (")[0]}
+                      </div>
+                    </div>
+                    {item.subTitle && (
+                      <div className={styles["item-description"]}>
+                        {item.subTitle}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
         <ChatActions
           uploadDocument={uploadDocument}
           uploadImage={uploadImage}
@@ -2604,6 +2855,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
             onKeyDown={onInputKeyDown}
             // onFocus={scrollToBottom}
             onClick={scrollToBottom}
+            onDoubleClick={handleDoubleClick}
             onPaste={handlePaste}
             rows={inputRows}
             autoFocus={autoFocus}
@@ -2611,29 +2863,6 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
               fontSize: config.fontSize,
             }}
           />
-          {/* {attachImages.length != 0 && (
-            <div className={styles["attach-images"]}>
-              {attachImages.map((image, index) => {
-                return (
-                  <div
-                    key={index}
-                    className={styles["attach-image"]}
-                    style={{ backgroundImage: `url("${image}")` }}
-                  >
-                    <div className={styles["attach-image-mask"]}>
-                      <DeleteImageButton
-                        deleteImage={() => {
-                          setAttachImages(
-                            attachImages.filter((_, i) => i !== index),
-                          );
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )} */}
           <div className={styles["attachments"]}>
             {attachImages.length != 0 && (
               <div className={styles["attach-images"]}>
@@ -2685,19 +2914,85 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                       >
                         <FileIcon {...style} glyphColor="#303030" />
                       </div>
-                      <div
-                        className={getFileNameClassName(attachImages.length)}
-                      >
-                        {file.name} ({file.tokenCount}K)
-                      </div>
-                      <div className={styles["attach-image-mask"]}>
-                        <DeleteImageButton
-                          deleteImage={() => {
-                            setAttachFiles(
-                              attachFiles.filter((_, i) => i !== index),
-                            );
+                      {renameAttachFile && renameAttachFile.index === index ? (
+                        <input
+                          type="text"
+                          className={getFileNameClassName(attachImages.length)}
+                          value={renameAttachFile.name}
+                          onChange={(e) =>
+                            setRenameAttachFile({
+                              ...renameAttachFile,
+                              name: e.target.value,
+                            })
+                          }
+                          onBlur={() => {
+                            if (renameAttachFile.name.trim()) {
+                              // 保留原始扩展名
+                              const originalExt = file.name.split(".").pop();
+                              const newName = renameAttachFile.name.includes(
+                                ".",
+                              )
+                                ? renameAttachFile.name
+                                : `${renameAttachFile.name}.${originalExt}`;
+
+                              const newFiles = [...attachFiles];
+                              newFiles[index] = { ...file, name: newName };
+                              setAttachFiles(newFiles);
+                            }
+                            setRenameAttachFile(null);
                           }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              e.currentTarget.blur();
+                            }
+                            if (e.key === "Escape") {
+                              setRenameAttachFile(null);
+                            }
+                          }}
+                          autoFocus
                         />
+                      ) : (
+                        <div
+                          className={getFileNameClassName(attachImages.length)}
+                          onDoubleClick={() => {
+                            setRenameAttachFile({
+                              index,
+                              name: file.name.split(".")[0], // 默认选中文件名部分，不包括扩展名
+                            });
+                          }}
+                        >
+                          {file.name} ({file.size}K, {file.tokenCount}Tokens)
+                        </div>
+                      )}
+                      <div className={styles["attach-image-mask"]}>
+                        <div style={{ display: "flex", gap: "4px" }}>
+                          <IconButton
+                            icon={<RenameIcon />}
+                            onClick={() => {
+                              setRenameAttachFile({
+                                index,
+                                name: file.name.split(".")[0], // 默认选中文件名部分，不包括扩展名
+                              });
+                            }}
+                            title={Locale.Chat.InputActions.RenameFile}
+                            style={{
+                              width: "18px",
+                              height: "18px",
+                              borderRadius: "4px",
+                              marginRight: "4px",
+                              border: "1px solid #e0e0e0",
+                              backgroundColor: "#f9f9f9",
+                            }}
+                          />
+                          <DeleteImageButton
+                            deleteImage={() => {
+                              setAttachFiles(
+                                attachFiles.filter((_, i) => i !== index),
+                              );
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   );
@@ -2707,7 +3002,13 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
           </div>
           <div className={styles["chat-input-textarea"]}>
             <div className={styles["token-counter"]}>
-              ({estimateTokenLengthInLLM(userInput)})
+              (
+              {estimateTokenLengthInLLM(userInput) +
+                (attachFiles?.reduce(
+                  (total, file) => total + (file.tokenCount || 0),
+                  0,
+                ) || 0)}
+              )
             </div>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <IconButton

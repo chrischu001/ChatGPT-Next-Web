@@ -74,11 +74,22 @@ const en: LocaleType = {
         light: "Light Theme",
         dark: "Dark Theme",
       },
+      ModelAtSelector: {
+        SelectModel: "Select Model",
+        AvailableModels: (count: number | undefined) =>
+          `${count ?? 0} Available Models`,
+        NoAvailableModels: "No Available Models For Matching",
+      },
+      MoveCursorToStart: "Double Click to Move Cursor to Start",
+      MoveCursorToEnd: "Double Click to Move Cursor to End",
       Prompt: "Prompts",
       Masks: "Masks",
       Clear: "Clear Context",
       Settings: "Settings",
       UploadImage: "Upload Images",
+      UnsupportedModelForUploadImage:
+        "Current model does not support image uploads.",
+      RenameFile: "Rename this file",
       CloudBackup: "Backup by Cloud",
       Translate: {
         Title: "Translate between ZH-EN",
@@ -126,10 +137,12 @@ const en: LocaleType = {
       },
       UploadFile: {
         Title: "Upload Plain Text File",
-        FileTooLarge: "Only support to upload single file with 100k.",
+        FileTooLarge: "Only support to upload single file with 1M.",
         TooManyFile: "Exceeds the maximum number of files allowed for upload.",
         UnsupportedFileType: "Unsupported File Type.",
         FailToRead: "File content reading failed.",
+        TooManyTokenToPasteAsFile:
+          "The amount of text pasted is excessive; it has been automatically attached as a file.",
         DuplicateFile: (filename: string) =>
           `The file "${filename}" already exists. Please do not upload it again.`,
       },
@@ -146,7 +159,7 @@ const en: LocaleType = {
       }
       return (
         inputHints +
-        ", / to search prompts, : to use commands\nCtrl + Shift + ; to quickly copy the last code block\nCtrl + Shift + L to regenerate AI response"
+        "\n@ to select models,/ to search prompts, : to use commands\nCtrl + Shift + ; to quickly copy the last code block\nCtrl + Shift + L to regenerate AI response"
       );
     },
     Send: "Send",
@@ -235,9 +248,15 @@ const en: LocaleType = {
         Action: "Reset",
         Confirm: "Confirm to reset all settings to default?",
       },
-      Clear: {
+      ClearChat: {
+        Title: "Clear Chat History",
+        SubTitle: "Clear all chat history and keep settings",
+        Action: "Clear",
+        Confirm: "Confirm to clear all chat history?",
+      },
+      ClearALL: {
         Title: "Clear All Data",
-        SubTitle: "Clear all messages and settings",
+        SubTitle: "Clear all chat history and settings to empty state",
         Action: "Clear",
         Confirm: "Confirm to clear all messages and settings?",
       },

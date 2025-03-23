@@ -1,6 +1,3 @@
-import Title from "antd/es/skeleton/Title";
-import { ShortcutKeyModal } from "../components/chat";
-import { SearchChatPage } from "../components/search-chat";
 import { getClientConfig } from "../config/client";
 import { SubmitKey } from "../store/config";
 
@@ -74,11 +71,21 @@ const cn = {
         light: "亮色模式",
         dark: "深色模式",
       },
+      ModelAtSelector: {
+        SelectModel: "选择模型",
+        AvailableModels: (count: number | undefined) =>
+          `${count ?? 0} 个可用模型`,
+        NoAvailableModels: "没有找到匹配的模型",
+      },
+      MoveCursorToStart: "双击跳转至段首",
+      MoveCursorToEnd: "双击跳转至段尾",
       Prompt: "快捷指令",
       Masks: "所有面具",
       Clear: "清除聊天",
       Settings: "对话设置",
       UploadImage: "上传图片",
+      UnsupportedModelForUploadImage: "当前模型不支持上传图片",
+      RenameFile: "重命名文件",
       CloudBackup: "云备份",
       Translate: {
         Title: "中英互译",
@@ -122,10 +129,11 @@ const cn = {
       },
       UploadFile: {
         Title: "上传文本文件",
-        FileTooLarge: "暂不支持上传超过100k的文件",
+        FileTooLarge: "暂不支持上传超过1M的文件",
         TooManyFile: "超出可上传文件数量",
         UnsupportedFileType: "不支持的文件类型",
         FailToRead: "文件内容读取失败",
+        TooManyTokenToPasteAsFile: "粘贴文本数量过大，自动粘贴为附件文本",
         DuplicateFile: (filename: string) =>
           `文件 "${filename}" 已存在，请勿重复上传`,
       },
@@ -142,7 +150,7 @@ const cn = {
       }
       return (
         inputHints +
-        "\n/ 触发预设，: 触发命令\nCtrl + Shift + ;  快速复制最后一个代码块\nCtrl + Shift + L 重新获取 AI 回复"
+        "\n@ 选择模型，/ 触发预设，: 触发命令\nCtrl + Shift + ;  快速复制最后一个代码块\nCtrl + Shift + L 重新获取 AI 回复"
       );
     },
     Send: "发送",
@@ -227,13 +235,19 @@ const cn = {
     Danger: {
       Reset: {
         Title: "重置所有设置",
-        SubTitle: "重置所有设置项回默认值",
+        SubTitle: "重置所有设置项回默认值（不包含聊天数据）",
         Action: "立即重置",
         Confirm: "确认重置所有设置？",
       },
-      Clear: {
-        Title: "清除所有数据",
-        SubTitle: "清除所有聊天、设置数据",
+      ClearChat: {
+        Title: "清除聊天数据",
+        SubTitle: "清除所有聊天数据（不包含设置）",
+        Action: "立即清除",
+        Confirm: "确认清除所有聊天数据？",
+      },
+      ClearALL: {
+        Title: "清除所有数据及设置",
+        SubTitle: "清除所有聊天、设置数据，恢复到初始状态",
         Action: "立即清除",
         Confirm: "确认清除所有聊天、设置数据？",
       },

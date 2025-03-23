@@ -76,6 +76,23 @@ export const REQUEST_TIMEOUT_MS = 60000;
 
 export const EXPORT_MESSAGE_CLASS_NAME = "export-markdown";
 
+export enum ThinkingType {
+  Unknown = -1, // 未知状态
+  ReasoningType = 0, // 推理内容
+  ThinkType = 1, // <think> 类型
+  ReferenceType = 2, // > 引用类型
+  MaybeNotThink = 3, // 非思考模式或丢失<think>模式
+}
+export const ThinkingTypeMap = Object.entries(ThinkingType).reduce(
+  (acc, [key, value]) => {
+    if (!isNaN(Number(value))) {
+      acc[value as number] = key;
+    }
+    return acc;
+  },
+  {} as Record<number, string>,
+);
+
 export enum ServiceProvider {
   OpenAI = "OpenAI",
   Azure = "Azure",
@@ -305,3 +322,101 @@ export const internalAllowedWebDavEndpoints = [
 ];
 
 export const PLUGINS = [{ name: "Search Chat", path: Path.SearchChat }];
+
+export const textFileExtensions = [
+  "txt",
+  "md",
+  "markdown",
+  "json",
+  "csv",
+  "tsv",
+  "xml",
+  "html",
+  "htm",
+  "css",
+  "js",
+  "ts",
+  "jsx",
+  "tsx",
+  "py",
+  "java",
+  "c",
+  "cpp",
+  "h",
+  "cs",
+  "php",
+  "rb",
+  "go",
+  "rs",
+  "swift",
+  "kt",
+  "sql",
+  "yaml",
+  "yml",
+  "toml",
+  "ini",
+  "cfg",
+  "conf",
+  "log",
+  "sh",
+  "bat",
+  "ps1",
+  "tex",
+  "rtf",
+  "scss",
+  "sass",
+  "less",
+  "vue",
+  "svelte",
+  "graphql",
+  "gql",
+  "r",
+  "pl",
+  "pm",
+  "lua",
+  "groovy",
+  "scala",
+  "dart",
+  "haskell",
+  "hs",
+  "clj",
+  "erl",
+  "ex",
+  "exs",
+  "jsp",
+  "asp",
+  "aspx",
+  "pug",
+  "jade",
+  "ejs",
+  "diff",
+  "patch",
+  "properties",
+  "env",
+  "plist",
+  "proto",
+  "gradle",
+  "rake",
+  "htaccess",
+  "htpasswd",
+  "dockerfile",
+  "dockerignore",
+  "gitignore",
+  "gitattributes",
+  "eslintrc",
+  "prettierrc",
+  "babelrc",
+  "stylelintrc",
+  "cmake",
+  "makefile",
+  "vbs",
+  "vbe",
+  "rst",
+  "adoc",
+  "srt",
+  "vtt",
+];
+
+export const MAX_DOC_CNT = 6; // 一次性支持上传的文件数量
+export const maxFileSizeInKB = 1024 * 1; // 1 MB
+export const minTokensForPastingAsFile = 4096; // 超过4k个token的文本粘贴为附件文件
