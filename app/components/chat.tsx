@@ -33,7 +33,8 @@ import EditIcon from "../icons/rename.svg";
 import EditToInputIcon from "../icons/edit_input.svg";
 import ConfirmIcon from "../icons/confirm.svg";
 import CancelIcon from "../icons/cancel.svg";
-import ImageIcon from "../icons/image.svg";
+import ContinueIcon from "../icons/continue.svg";
+// import ImageIcon from "../icons/image.svg";
 
 // import LightIcon from "../icons/light.svg";
 // import DarkIcon from "../icons/dark.svg";
@@ -49,7 +50,11 @@ import ReloadIcon from "../icons/reload.svg";
 import TranslateIcon from "../icons/translate.svg";
 import OcrIcon from "../icons/ocr.svg";
 import PrivacyIcon from "../icons/privacy.svg";
-import UploadDocIcon from "../icons/upload-doc.svg";
+import PrivacyModeIcon from "../icons/incognito.svg";
+// import UploadDocIcon from "../icons/upload-doc.svg";
+import CollapseIcon from "../icons/collapse.svg";
+import ExpandIcon from "../icons/expand.svg";
+import AttachmentIcon from "../icons/paperclip.svg";
 
 import {
   ChatMessage,
@@ -506,6 +511,7 @@ export function ChatActions(props: {
   uploadImage: () => Promise<string[]>;
   attachImages: string[];
   setAttachImages: (images: string[]) => void;
+  attachFiles: UploadFile[];
   setAttachFiles: (files: UploadFile[]) => void;
   setUploading: (uploading: boolean) => void;
   showPromptModal: () => void;
@@ -525,13 +531,56 @@ export function ChatActions(props: {
 
   // translate
   const [isTranslating, setIsTranslating] = useState(false);
+  const [originalTextForTranslate, setOriginalTextForTranslate] = useState<
+    string | null
+  >(null);
+  const [translatedText, setTranslatedText] = useState<string | null>(null);
   // ocr
   const [isOCRing, setIsOCRing] = useState(false);
   // privacy
   const [isPrivacying, setIsPrivacying] = useState(false);
+  const [originalTextForPrivacy, setOriginalTextForPrivacy] = useState<
+    string | null
+  >(null);
+  const [privacyProcessedText, setPrivacyProcessedText] = useState<
+    string | null
+  >(null);
+  // continue chat
+  const [isContinue, setIsContinue] = useState(false);
+  // model
   const { translateModel, ocrModel } = useAccessStore();
 
+  // 监听用户输入变化，如果输入改变则重置撤销状态
+  useEffect(() => {
+    // 当用户输入变化时，检查是否需要重置撤销状态
+    if (
+      originalTextForTranslate !== null &&
+      props.userInput.trim() !== translatedText?.trim()
+    ) {
+      // 如果当前输入与原始输入不同，则重置翻译的撤销状态
+      setOriginalTextForTranslate(null);
+      setTranslatedText(null);
+    }
+
+    if (
+      originalTextForPrivacy !== null &&
+      props.userInput.trim() !== privacyProcessedText
+    ) {
+      // 如果当前输入与经过隐私处理的原始输入不同，则重置隐私处理的撤销状态
+      setOriginalTextForPrivacy(null);
+      setPrivacyProcessedText(null);
+    }
+  }, [props.userInput]);
+
   const handleTranslate = async () => {
+    if (originalTextForTranslate !== null) {
+      // 执行撤销操作
+      props.setUserInput(originalTextForTranslate);
+      setOriginalTextForTranslate(null);
+      setTranslatedText(null);
+      showToast(Locale.Chat.InputActions.Translate.UndoToast);
+      return;
+    }
     if (props.userInput.trim() === "") {
       showToast(Locale.Chat.InputActions.Translate.BlankToast);
       return;
@@ -569,11 +618,20 @@ export function ChatActions(props: {
             showToast(Locale.Chat.InputActions.Translate.FailTranslateToast);
             return;
           }
+
+          let translatedContent: string;
           if (typeof message === "string") {
-            props.setUserInput(message);
+            translatedContent = message;
           } else {
-            props.setUserInput(message.content);
+            translatedContent = message.content;
           }
+          translatedContent = translatedContent || props.userInput; // 避免空翻译无法撤销
+
+          // 保存原始文本和翻译结果以便撤销
+          setOriginalTextForTranslate(props.userInput);
+          setTranslatedText(translatedContent);
+          props.setUserInput(translatedContent);
+
           showToast(Locale.Chat.InputActions.Translate.SuccessTranslateToast);
         } else {
           showToast(Locale.Chat.InputActions.Translate.FailTranslateToast);
@@ -586,7 +644,7 @@ export function ChatActions(props: {
     let uploadedImages: string[] = props.attachImages || [];
     if (isEmpty(props.attachImages)) {
       uploadedImages = await props.uploadImage();
-      console.log("uploadedImages", uploadedImages);
+      // console.log("uploadedImages", uploadedImages);
       // 如果上传后仍然没有图片，则退出
       if (isEmpty(uploadedImages)) {
         showToast(Locale.Chat.InputActions.OCR.BlankToast);
@@ -654,6 +712,15 @@ export function ChatActions(props: {
     });
   };
   const handlePrivacy = async () => {
+    if (originalTextForPrivacy !== null) {
+      // 执行撤销操作
+      props.setUserInput(originalTextForPrivacy);
+      setOriginalTextForPrivacy(null);
+      setPrivacyProcessedText(null);
+      showToast(Locale.Chat.InputActions.Privacy.UndoToast);
+      return;
+    }
+
     if (props.userInput.trim() === "") {
       showToast(Locale.Chat.InputActions.Privacy.BlankToast);
       return;
@@ -661,7 +728,11 @@ export function ChatActions(props: {
     setIsPrivacying(true);
     showToast(Locale.Chat.InputActions.Privacy.isPrivacyToast);
     const markedText = maskSensitiveInfo(props.userInput);
+    // 保存原始文本以便撤销
+    setOriginalTextForPrivacy(props.userInput);
+    setPrivacyProcessedText(markedText);
     props.setUserInput(markedText);
+
     showToast(Locale.Chat.InputActions.Privacy.SuccessPrivacyToast);
     setIsPrivacying(false);
   };
@@ -716,6 +787,20 @@ export function ChatActions(props: {
 
     return maskedText;
   }
+  const handleContinueChat = async () => {
+    setIsContinue(true);
+    showToast(Locale.Chat.InputActions.Continue.isContinueToast);
+
+    const continuePrompt = config.customUserContinuePrompt
+      ? config.customUserContinuePrompt
+      : Locale.Chat.InputActions.Continue.ContinuePrompt;
+    chatStore
+      .onUserInput(continuePrompt, [], [], true)
+      .then(() => setIsContinue(false));
+    chatStore.setLastInput(continuePrompt);
+    setIsContinue(false);
+  };
+
   function isValidMessage(message: any): boolean {
     if (typeof message !== "string") {
       return false;
@@ -739,7 +824,135 @@ export function ChatActions(props: {
     }
     return true;
   }
+  // 统一的文件上传处理函数
+  const handleFileUpload = () => {
+    if (props.uploading) return;
 
+    // 创建文件输入元素
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+
+    // 设置接受的文件类型
+    if (canUploadImage) {
+      // 支持图片和文本文件
+      const imageTypes =
+        "image/png, image/jpeg, image/webp, image/heic, image/heif";
+      const textTypes = textFileExtensions.map((ext) => `.${ext}`).join(",");
+      fileInput.accept = `${imageTypes}, ${textTypes}`;
+    } else {
+      // 只支持文本文件
+      fileInput.accept = textFileExtensions.map((ext) => `.${ext}`).join(",");
+    }
+
+    fileInput.multiple = true;
+
+    fileInput.onchange = async (event: any) => {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      setUploading(true);
+
+      const imageFiles: File[] = [];
+      const textFiles: File[] = [];
+
+      // 分类文件
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.type.startsWith("image/")) {
+          if (canUploadImage) {
+            imageFiles.push(file);
+          } else {
+            showToast(
+              Locale.Chat.InputActions.UploadFile.UnsupportToUploadImage,
+            );
+            continue;
+          }
+        } else {
+          textFiles.push(file);
+        }
+      }
+
+      // 处理图片文件
+      if (imageFiles.length > 0) {
+        const images = [...props.attachImages];
+
+        for (const file of imageFiles) {
+          try {
+            const dataUrl = await uploadImageRemote(file);
+            images.push(dataUrl);
+          } catch (e) {
+            console.error("Error uploading image:", e);
+            showToast(String(e));
+          }
+        }
+
+        // 限制图片数量
+        if (images.length > 3) {
+          images.splice(3, images.length - 3);
+        }
+
+        props.setAttachImages(images);
+      }
+
+      // 处理文本文件
+      if (textFiles.length > 0) {
+        const files = [...props.attachFiles];
+
+        for (const file of textFiles) {
+          try {
+            const data = await uploadFileRemote(file);
+            const tokenCount: number = countTokens(data.content);
+            const fileData: UploadFile = {
+              name: file.name,
+              url: data.content,
+              contentType: data.type,
+              size: parseFloat((file.size / 1024).toFixed(2)),
+              tokenCount: tokenCount,
+            };
+
+            // 限制文件大小
+            if (fileData?.size && fileData?.size > maxFileSizeInKB) {
+              showToast(Locale.Chat.InputActions.UploadFile.FileTooLarge);
+              continue;
+            }
+
+            // 检查是否有同名且内容相同的文件
+            const isDuplicate = files.some(
+              (existingFile) =>
+                existingFile.name === fileData.name &&
+                existingFile.url === fileData.url,
+            );
+
+            if (isDuplicate) {
+              showToast(
+                Locale.Chat.InputActions.UploadFile.DuplicateFile(file.name),
+              );
+              continue;
+            }
+
+            if (data.content && tokenCount > 0) {
+              files.push(fileData);
+            }
+          } catch (e) {
+            console.error("Error uploading file:", e);
+            showToast(String(e));
+          }
+        }
+
+        // 限制文件数量
+        if (files.length > MAX_DOC_CNT) {
+          files.splice(MAX_DOC_CNT, files.length - MAX_DOC_CNT);
+          showToast(Locale.Chat.InputActions.UploadFile.TooManyFile);
+        }
+
+        props.setAttachFiles(files);
+      }
+
+      setUploading(false);
+    };
+
+    fileInput.click();
+  };
   // switch themes
   const theme = config.theme;
   function nextTheme() {
@@ -764,9 +977,12 @@ export function ChatActions(props: {
       m.name === currentModel &&
       m.provider?.providerName === currentProviderName,
   )?.displayName;
+  const canUploadImage = isVisionModel(currentModel);
 
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showUploadImage, setShowUploadImage] = useState(false);
+  const [showMobileActions, setShowMobileActions] = useState(false);
+  const toggleMobileActions = () => setShowMobileActions(!showMobileActions);
 
   const isMobileScreen = useMobileScreen();
   const { setAttachImages, setUploading } = props;
@@ -797,7 +1013,7 @@ export function ChatActions(props: {
 
   return (
     <div className={styles["chat-input-actions"]}>
-      <div>
+      <div className={styles["primary-actions"]}>
         {couldStop && (
           <ChatAction
             onClick={stopAll}
@@ -819,8 +1035,13 @@ export function ChatActions(props: {
             icon={<SettingsIcon />}
           />
         )}
-
-        {showUploadImage && (
+        {/* 统一的上传按钮，使用回形针图标 */}
+        <ChatAction
+          onClick={handleFileUpload}
+          text={Locale.Chat.InputActions.UploadFile.Title(canUploadImage)}
+          icon={props.uploading ? <LoadingButtonIcon /> : <AttachmentIcon />}
+        />
+        {/* {showUploadImage && (
           <ChatAction
             onClick={props.uploadImage}
             text={Locale.Chat.InputActions.UploadImage}
@@ -831,7 +1052,7 @@ export function ChatActions(props: {
           onClick={props.uploadDocument}
           text={Locale.Chat.InputActions.UploadFile.Title}
           icon={props.uploading ? <LoadingButtonIcon /> : <UploadDocIcon />}
-        />
+        /> */}
         {/* {!isMobileScreen && (
           <ChatAction
             onClick={nextTheme}
@@ -888,7 +1109,28 @@ export function ChatActions(props: {
             });
           }}
         />
-
+        <ChatAction
+          text={Locale.Chat.InputActions.Continue.Title}
+          icon={<ContinueIcon />}
+          onClick={handleContinueChat}
+        />
+        <ChatAction
+          text={
+            !session?.inPrivateMode
+              ? Locale.Chat.InputActions.PrivateMode.On
+              : Locale.Chat.InputActions.PrivateMode.Off
+          }
+          alwaysShowText={session?.inPrivateMode}
+          icon={<PrivacyModeIcon />}
+          onClick={() => {
+            if (!session?.inPrivateMode) {
+              chatStore.newSession(undefined, true);
+              showToast(Locale.Chat.InputActions.PrivateMode.OnToast);
+            } else {
+              chatStore.deleteSession(chatStore.currentSessionIndex);
+            }
+          }}
+        />
         <ChatAction
           onClick={() => setShowModelSelector(true)}
           alwaysShowText={true}
@@ -921,8 +1163,23 @@ export function ChatActions(props: {
             }}
           />
         )}
+        {isMobileScreen && (
+          <ChatAction
+            onClick={toggleMobileActions}
+            text={
+              showMobileActions
+                ? Locale.Chat.InputActions.Collapse
+                : Locale.Chat.InputActions.Expand
+            }
+            icon={showMobileActions ? <CollapseIcon /> : <ExpandIcon />}
+          />
+        )}
       </div>
-      <div>
+      <div
+        className={`${styles["secondary-actions"]} ${
+          isMobileScreen && !showMobileActions ? styles["mobile-collapsed"] : ""
+        }`}
+      >
         {!isMobileScreen && (
           <ChatAction
             onClick={() => props.setShowShortcutKeyModal(true)}
@@ -949,11 +1206,13 @@ export function ChatActions(props: {
         <ChatAction
           onClick={handleTranslate}
           text={
-            isTranslating
+            originalTextForTranslate !== null
+              ? Locale.Chat.InputActions.Translate.Undo
+              : isTranslating
               ? Locale.Chat.InputActions.Translate.isTranslatingToast
               : Locale.Chat.InputActions.Translate.Title
           }
-          alwaysShowText={isTranslating}
+          alwaysShowText={isTranslating || originalTextForTranslate !== null}
           icon={<TranslateIcon />}
         />
         {!isMobileScreen && (
@@ -971,11 +1230,13 @@ export function ChatActions(props: {
         <ChatAction
           onClick={handlePrivacy}
           text={
-            isPrivacying
+            originalTextForPrivacy !== null
+              ? Locale.Chat.InputActions.Privacy.Undo
+              : isPrivacying
               ? Locale.Chat.InputActions.Privacy.isPrivacyToast
               : Locale.Chat.InputActions.Privacy.Title
           }
-          alwaysShowText={isPrivacying}
+          alwaysShowText={isPrivacying || originalTextForPrivacy !== null}
           icon={<PrivacyIcon />}
         />
       </div>
@@ -1080,6 +1341,14 @@ export function ShortcutKeyModal(props: { onClose: () => void }) {
       keys: isMac ? ["⌘", "/"] : ["Ctrl", "/"],
     },
     {
+      title: Locale.Chat.ShortcutKey.moveCursorToStart,
+      keys: isMac ? ["⌘", "Shift", "Left"] : ["Ctrl", "Shift", "Left"],
+    },
+    {
+      title: Locale.Chat.ShortcutKey.moveCursorToEnd,
+      keys: isMac ? ["⌘", "Shift", "Right"] : ["Ctrl", "Shift", "Right"],
+    },
+    {
       title: Locale.Chat.ShortcutKey.searchChat,
       keys: isMac ? ["⌘", "Alt", "F"] : ["Ctrl", "Alt", "F"],
     },
@@ -1154,7 +1423,7 @@ function ChatInputActions(props: {
   } = props;
 
   return (
-    <div className={styles["chat-input-actions"]}>
+    <div className={styles["message-actions-row"]}>
       {message.streaming ? (
         <ChatAction
           text={Locale.Chat.Actions.Stop}
@@ -1175,11 +1444,11 @@ function ChatInputActions(props: {
             onClick={() => onDelete(message.id ?? i)}
           />
 
-          <ChatAction
+          {/* <ChatAction
             text={Locale.Chat.Actions.Pin}
             icon={<PinIcon />}
             onClick={() => onPinMessage(message)}
-          />
+          /> */}
           <ChatAction
             text={Locale.Chat.Actions.Copy}
             icon={<CopyIcon />}
@@ -1353,7 +1622,9 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     clear: () =>
       chatStore.updateTargetSession(session, (session) => {
         session.clearContextIndex = session.messages.length;
-        session.messages[session.messages.length - 1].beClear = true;
+        if (session.clearContextIndex > 1) {
+          session.messages[session.messages.length - 1].beClear = true;
+        }
       }),
     new: () => chatStore.newSession(),
     search: () => navigate(Path.SearchChat),
@@ -1362,6 +1633,15 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     next: () => chatStore.nextSession(1),
     fork: () => chatStore.forkSession(),
     del: () => chatStore.deleteSession(chatStore.currentSessionIndex),
+    pin: () => chatStore.pinSession(chatStore.currentSessionIndex),
+    private: () => {
+      if (!chatStore.sessions[chatStore.currentSessionIndex]?.inPrivateMode) {
+        chatStore.newSession(undefined, true);
+        showToast(Locale.Chat.InputActions.PrivateMode.OnToast);
+      } else {
+        chatStore.deleteSession(chatStore.currentSessionIndex);
+      }
+    },
   });
 
   // only search prompts when user input is short
@@ -1546,6 +1826,30 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       } else if (e.key === "Escape") {
         e.preventDefault();
         setShowModelAtSelector(false);
+      }
+      return;
+    }
+    if (e.ctrlKey && e.shiftKey) {
+      const textarea = inputRef.current;
+      if (!textarea) return;
+
+      if (e.key === "ArrowLeft") {
+        // Ctrl+Shift+左箭头：跳转到段首
+        e.preventDefault();
+        textarea.setSelectionRange(0, 0);
+        textarea.focus();
+        textarea.scrollTop = 0;
+        showToast(Locale.Chat.InputActions.MoveCursorToStart);
+      } else if (e.key === "ArrowRight") {
+        // Ctrl+Shift+右箭头：跳转到段尾
+        e.preventDefault();
+        textarea.setSelectionRange(
+          textarea.value.length,
+          textarea.value.length,
+        );
+        textarea.focus();
+        textarea.scrollTop = textarea.scrollHeight;
+        showToast(Locale.Chat.InputActions.MoveCursorToEnd);
       }
       return;
     }
@@ -1917,25 +2221,6 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 双击处理函数
-  const [cursorAtStart, setCursorAtStart] = useState(false);
-  const handleDoubleClick = () => {
-    const textarea = inputRef.current;
-    if (!textarea) return;
-    if (cursorAtStart) {
-      // 如果光标在起点，则移动到结尾
-      textarea.setSelectionRange(userInput.length, userInput.length);
-      setCursorAtStart(false);
-      showToast(Locale.Chat.InputActions.MoveCursorToEnd);
-    } else {
-      // 如果光标不在起点，则移动到起点
-      textarea.setSelectionRange(0, 0);
-      setCursorAtStart(true);
-      showToast(Locale.Chat.InputActions.MoveCursorToStart);
-    }
-    // 保持焦点
-    textarea.focus();
-  };
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const currentModel = chatStore.currentSession().mask.modelConfig.model;
@@ -2339,29 +2624,51 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     const { statistic } = message;
     if (!statistic) return mainInfo;
 
-    const { completionTokens, firstReplyLatency, totalReplyLatency } =
-      statistic;
+    const {
+      singlePromptTokens,
+      completionTokens,
+      firstReplyLatency,
+      totalReplyLatency,
+    } = statistic;
 
-    if (
-      completionTokens === undefined ||
-      !firstReplyLatency ||
-      !totalReplyLatency
-    ) {
-      return (
-        message.date.toLocaleString() +
-        (message.model ? ` - ${message.displayName || message.model}` : "")
-      );
+    // 根据角色动态处理统计信息
+    if (message.role === "assistant") {
+      // Assistant 需要检查所有相关字段
+      if (
+        completionTokens === undefined ||
+        !firstReplyLatency ||
+        !totalReplyLatency
+      ) {
+        return mainInfo;
+      }
+    } else {
+      // 其他角色只需要检查 prompt tokens
+      if (singlePromptTokens === undefined) return mainInfo;
     }
 
-    const tokenString = `${completionTokens}`;
-    const ttft = (firstReplyLatency / 1000).toFixed(2);
-    const latency = (totalReplyLatency / 1000).toFixed(2);
-    const speed = (
-      (1000 * completionTokens) /
-      (totalReplyLatency - firstReplyLatency)
-    ).toFixed(2);
+    // 动态生成统计信息
+    const tokenString =
+      message.role === "assistant"
+        ? `${completionTokens} Tokens`
+        : `${singlePromptTokens} Tokens`;
 
-    const statInfo = `📊${tokenString} Tokens ⚡ ${speed} T/s ⏱️ FT:${ttft}s | TT:${latency}s`;
+    // 仅 assistant 显示性能指标
+    const performanceInfo =
+      message.role === "assistant"
+        ? (() => {
+            const ttft = (firstReplyLatency! / 1000).toFixed(2);
+            const latency = (totalReplyLatency! / 1000).toFixed(2);
+            const speed = (
+              (1000 * completionTokens!) /
+              (totalReplyLatency! - firstReplyLatency!)
+            ).toFixed(2);
+            return `⚡ ${speed} T/s ⏱️ FT:${ttft}s | TT:${latency}s`;
+          })()
+        : "";
+
+    const statInfo = performanceInfo
+      ? `${tokenString} ${performanceInfo}`
+      : tokenString;
 
     return isMobileScreen ? (
       <>
@@ -2469,13 +2776,17 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       >
         {messages.map((message, i) => {
           const isUser = message.role === "user";
+          const shouldHideUserMessage =
+            isUser && message.isContinuePrompt === true;
+          if (!config.enableShowUserContinuePrompt && shouldHideUserMessage) {
+            return null;
+          }
           const isContext = i < context.length;
           const showActions =
             i > 0 &&
             !(message.preview || message.content.length === 0) &&
             !isContext;
           const showTyping = message.preview || message.streaming;
-
           const shouldShowClearContextDivider =
             i === clearContextIndex - 1 || message?.beClear === true;
           return (
@@ -2590,7 +2901,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
 
                     {iconUpEnabled && showActions && (
                       <div className={styles["chat-message-actions"]}>
-                        <div className={styles["chat-input-actions"]}>
+                        <div className={styles["message-actions-row"]}>
                           <ChatInputActions
                             message={message}
                             onUserStop={onUserStop}
@@ -2717,7 +3028,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                   </div>
                   {iconDownEnabled && showActions && (
                     <div className={styles["chat-message-actions"]}>
-                      <div className={styles["chat-input-actions"]}>
+                      <div className={styles["message-actions-row"]}>
                         <ChatInputActions
                           message={message}
                           onUserStop={onUserStop}
@@ -2815,6 +3126,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
           uploadImage={uploadImage}
           attachImages={attachImages}
           setAttachImages={setAttachImages}
+          attachFiles={attachFiles}
           setAttachFiles={setAttachFiles}
           setUploading={setUploading}
           showPromptModal={() => setShowPromptModal(true)}
@@ -2855,7 +3167,6 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
             onKeyDown={onInputKeyDown}
             // onFocus={scrollToBottom}
             onClick={scrollToBottom}
-            onDoubleClick={handleDoubleClick}
             onPaste={handlePaste}
             rows={inputRows}
             autoFocus={autoFocus}

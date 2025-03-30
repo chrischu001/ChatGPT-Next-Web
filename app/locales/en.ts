@@ -65,14 +65,26 @@ const en: LocaleType = {
       search: "Search Chat",
       edit: "Edit Chat",
       resend: "Resend Chat",
+      private: "Switch Private Mode",
+      pin: "Pin Current Session",
     },
     InputActions: {
+      Collapse: "Fold Ribbon",
+      Expand: "Expand Ribbon",
       Stop: "Stop",
       ToBottom: "To Latest",
       Theme: {
         auto: "Auto",
         light: "Light Theme",
         dark: "Dark Theme",
+      },
+      PrivateMode: {
+        On: "Open Private Mode",
+        OnToast:
+          "Private mode is now enabled, and a new private session has been created.",
+        Off: "Close Private Mode",
+        Info: "In Private Mode Currently",
+        Return: "↩ Back to Chat Page",
       },
       ModelAtSelector: {
         SelectModel: "Select Model",
@@ -91,6 +103,12 @@ const en: LocaleType = {
         "Current model does not support image uploads.",
       RenameFile: "Rename this file",
       CloudBackup: "Backup by Cloud",
+      Continue: {
+        Title: "Complete Chat",
+        isContinueToast: "Currently completing chat...",
+        ContinuePrompt:
+          "Please continue to elaborate on the incomplete content above, maintaining a consistent train of thought and style. Proceed directly with the output without repeating existing information or adding summaries or introductions. Automatically determine a reasonable ending point based on the content type (writing, problem-solving, code, etc.).",
+      },
       Translate: {
         Title: "Translate between ZH-EN",
         BlankToast: "Input content is empty, no translation will be performed",
@@ -99,11 +117,15 @@ const en: LocaleType = {
           "This translation failed; please check the translation model settings and try again.",
         SuccessTranslateToast:
           "This translation has been completed and replaced the input text.",
+        Undo: "Undo Translate",
+        UndoToast: "Undo Translate Success",
         TranslatePrompt:
           "Please act as a Chinese-English interpreter, verify the accuracy of the information, and translate it naturally, fluently, and idiomatically, using beautiful and elegant expressions. The text may contain redundant line breaks within paragraphs and pagination issues due to copying problems, which should be intelligently removed in context. Regardless of what the other party replies, you should only translate the content. You should only respond with the translated content and not with any other information. Do not provide explanations. This is the content you need to translate: \n",
       },
       OCR: {
         Title: "OCR",
+        Screenshot: "Screenshot OCR",
+        ImportImage: "ImportImage OCR",
         BlankToast: "No image input detected, no OCR will be performed",
         isDetectingToast: "Currently OCR ...",
         FailDetectToast:
@@ -126,7 +148,7 @@ const en: LocaleType = {
           "Please help me OCR this image, according to the above rules, and ensure the accuracy of the output results without any additional content.",
       },
       Privacy: {
-        Title: "Mosaic for Privacy Input, irreversible",
+        Title: "Privatize the input",
         BlankToast:
           "Input content is empty, no privacy mosaic will be performed",
         isPrivacyToast: "Currently privacy mosaic ...",
@@ -134,12 +156,19 @@ const en: LocaleType = {
           "This privacy mosaic failed; please check the privacy model settings and try again.",
         SuccessPrivacyToast:
           "This privacy mosaic has been completed and replaced the input content.",
+        Undo: "Undo Privatize",
+        UndoToast: "Undo Privatize Success",
       },
       UploadFile: {
-        Title: "Upload Plain Text File",
+        Title: ((canUploadImage: boolean = false) =>
+          canUploadImage
+            ? "Upload Image or Plain Text File"
+            : "Upload Plain Text File") as any,
         FileTooLarge: "Only support to upload single file with 1M.",
         TooManyFile: "Exceeds the maximum number of files allowed for upload.",
         UnsupportedFileType: "Unsupported File Type.",
+        UnsupportToUploadImage:
+          "No image uploads for the model's lack of visual capabilities configuration.",
         FailToRead: "File content reading failed.",
         TooManyTokenToPasteAsFile:
           "The amount of text pasted is excessive; it has been automatically attached as a file.",
@@ -178,6 +207,8 @@ const en: LocaleType = {
       copyLastCode: "Copy Last Code Block",
       resendLastMessage: "Resend Last Message",
       showShortcutKey: "Show Shortcuts",
+      moveCursorToStart: "Move Cursor to Start",
+      moveCursorToEnd: "Move Cursor to End",
       searchChat: "Search Chat History",
     },
   },
@@ -219,6 +250,7 @@ const en: LocaleType = {
     All: "Select All",
     Latest: "Select Latest",
     Clear: "Clear",
+    HideUserContinueMsg: "Hide User Continue Msg",
   },
   Memory: {
     Title: "Memory Prompt",
@@ -374,6 +406,16 @@ const en: LocaleType = {
       EditModal: {
         Title: "Edit Prompt",
       },
+      CustomUserContinuePrompt: {
+        Title: "Prompt for AI Conversation Completion",
+        SubTitle:
+          "Custom prompt for conversation completion, used to guide the model in completing conversations",
+        Enable: "Show Continue Completion Message",
+        Edit: "Edit Prompt",
+        Modal: {
+          Title: "Continue Completion Prompt",
+        },
+      },
     },
     HistoryCount: {
       Title: "Attached Messages Count",
@@ -508,6 +550,39 @@ const en: LocaleType = {
       Title: "ocr model",
       SubTitle: "Model used to extract text from input image",
     },
+    // Params: {
+    //   SessionInfo: "Session Info",
+    //   temperature: "temperature",
+    //   top_p: "top_p",
+    //   max_tokens: "max_tokens",
+    //   presence_penalty: "presence_penalty",
+    //   frequency_penalty: "frequency_penalty",
+    //   current_history: "current_history",
+    // },
+    Params: {
+      SessionInfo: "会话信息",
+      temperature: {
+        name: "随机温度",
+        tip: "控制生成文本的随机性 (0-2), 值越大创造性越高, 低温抑制知识幻觉",
+      },
+      top_p: {
+        name: "采样概率",
+        tip: "控制生成文本的多样性 (0-1), 值越小内容越单调, 通常与温度二选一使用",
+      },
+      max_tokens: {
+        name: "最大回复",
+        tip: "生成文本的最大长度, 思考模型、视觉对话、代码生成建议设置高回复限制",
+      },
+      presence_penalty: {
+        name: "话题创意",
+        tip: "鼓励模型谈论新话题 (-2 到 2), 值越大越容易扩展到新话题, 降低主题一致性",
+      },
+      frequency_penalty: {
+        name: "重复抑制",
+        tip: "降低重复词汇的可能性 (-2 到 2), 值越大越能避免AI使用重复词汇",
+      },
+      current_history: "当前上下文",
+    },
     Temperature: {
       Title: "Temperature",
       SubTitle: "A larger value makes the more random output",
@@ -554,13 +629,16 @@ const en: LocaleType = {
   },
   Store: {
     DefaultTopic: "New Conversation",
+    PrivateTopic: "Temporary Chat Window, Records Not Saved",
     BotHello: "Hello! How can I assist you today?",
     Error: "Something went wrong, please try again later.",
     Prompt: {
       History: (content: string) =>
         "This is a summary of the chat history as a recap: " + content,
-      Topic:
+      old_Topic:
         "Please generate a four to five word title summarizing our conversation without any lead-in, punctuation, quotation marks, periods, symbols, bold text, or additional text. Remove enclosing quotation marks.",
+      Topic:
+        "Create a concise, 3-8 words title with an emoji as a title for the prompt in the given language. Suitable Emojis for the summary can be used to enhance understanding but avoid quotation marks or special formatting. RESPOND ONLY WITH THE TITLE TEXT.\nExamples of titles:\n📉 Stock Market Trends\n🍪 Perfect Chocolate Chip Recipe\n🎵 Evolution of Music Streaming\n🎮 Video Game Development Insights",
       Summarize:
         "Summarize the discussion briefly in 200 words or less to use as a prompt for future context.",
     },
@@ -644,6 +722,11 @@ const en: LocaleType = {
         SubTitle:
           "Automatically collapse/expand overly long code blocks when CodeFold is enabled",
       },
+      FloatingButton: {
+        Title: "Enable Floating Button",
+        SubTitle:
+          "View current session information and access shortcut functions from the floating ball when enabled.",
+      },
       Share: {
         Title: "Share This Mask",
         SubTitle: "Generate a link to this mask",
@@ -701,7 +784,74 @@ const en: LocaleType = {
     Topic: "Topic",
     Time: "Time",
   },
-
+  CustomProvider: {
+    Title: "Custom AI Provider",
+    AddButton: "Add Provider",
+    Count: "Total {count} provider configurations",
+    SearchPlaceholder: "Search AI providers...",
+    Loading: "Loading AI providers...",
+    NoProviders: "No matching AI providers found",
+    Edit: "Edit",
+    Delete: "Delete",
+    ConfirmDeleteProvider: "Are you sure you want to delete this AI provider?",
+    Return: "Back",
+    BasicInfo: "Basic Information",
+    ModelConfig: "Model Configuration",
+    APIConfig: "API Configuration",
+    AdvancedConfig: "Advanced Settings",
+    Name: "Name",
+    NamePlaceholder: "e.g., OpenAI Official",
+    Type: "Type",
+    CustomAPI: "Custom API",
+    DescriptionPlaceholder: "Add description (optional)",
+    ApiKeyPlaceholder: "Enter your API Key",
+    Show: "Show",
+    Hide: "Hide",
+    Previous: "Previous",
+    Next: "Next",
+    SaveChanges: "Save Changes",
+    AddProvider: "Add Provider",
+    DefaultOpenAIDescription: "Default OpenAI API Configuration",
+    CustomAPIService: "Custom API Endpoint",
+    CustomHostedDescription: "Self-hosted API Service",
+    AdvancedOptions: "Advanced Options",
+    NoAdvancedOptions: "No additional advanced options available.",
+    TypeSubtitle: "Select your AI service provider type",
+    NameSubtitle: "Set a recognizable name for your AI provider",
+    ApiUrlSubtitle: "Base API URL. For OpenAI, use: https://api.openai.com",
+    ApiKeySubtitle:
+      "Your API key will be securely stored locally and used for API requests",
+    ApiNameRequired: "API name is required",
+    ApiUrlRequired: "API URL is required",
+    ApiKeyRequired: "API key is required",
+    ApiConfigRequired: "Please fill in API Key and API URL first",
+    SearchModel: "Search models...",
+    Select: {
+      All: "Select All",
+      Clear: "Clear",
+    },
+    RefreshModels: "Refresh Models",
+    LoadingModels: "Loading model list...",
+    NoModelsFound: "No models found",
+    NoModelsFoundHint:
+      "Verify API information and try refreshing the model list",
+    NoModels: "No models available",
+    NoSelectedModels: "No selected models",
+    ModelsCount: "{count} models",
+    ProviderUpdated: "Provider updated",
+    ProviderAdded: "Provider added",
+    ProviderEnabled: "Provider enabled",
+    ProviderDisabled: "Provider disabled",
+    ToggleEnable: "Click to enable",
+    ToggleDisable: "Click to disable",
+    Status: {
+      Enabled: "Enabled",
+      Disabled: "Disabled",
+    },
+    EmptyTitle: "No AI Providers",
+    EmptyDescription: 'Click the "Add Provider" button to create one',
+    EmptySearchDescription: "Try different keywords or clear search filters",
+  },
   URLCommand: {
     Code: "Detected access code from url, confirm to apply? ",
     Settings: "Detected settings from url, confirm to apply?",

@@ -43,8 +43,10 @@ export type ChatMessage = RequestMessage & {
   displayName?: string;
   providerName?: string;
   beClear?: boolean;
+  isContinuePrompt?: boolean;
 
   statistic?: {
+    singlePromptTokens?: number;
     completionTokens?: number;
     reasoningTokens?: number;
     firstReplyLatency?: number;
@@ -80,6 +82,8 @@ export interface ChatSession {
   lastUpdate: number;
   lastSummarizeIndex: number;
   clearContextIndex?: number;
+  inPrivateMode?: boolean;
+  pinned?: boolean;
 
   mask: Mask;
 }
@@ -137,10 +141,25 @@ function createTemplateRegex(output: string) {
 }
 
 function countMessages(msgs: ChatMessage[]) {
-  return msgs.reduce(
-    (pre, cur) => pre + estimateTokenLengthInLLM(getMessageTextContent(cur)),
-    0,
-  );
+  return msgs.reduce((pre, cur) => pre + estimateMessageTokenInLLM(cur), 0);
+}
+
+export function estimateMessageTokenInLLM(message: RequestMessage) {
+  if (typeof message.content === "string") {
+    return estimateTokenLengthInLLM(message.content);
+  }
+  let total_tokens = 0;
+  for (const c of message.content) {
+    if (c.type === "text" && c.text) {
+      total_tokens += estimateTokenLengthInLLM(c.text);
+    } else if (c.type === "file_url" && c.file_url?.url) {
+      total_tokens +=
+        c.file_url?.tokenCount || estimateTokenLengthInLLM(c.file_url?.url);
+    } else if (c.type === "image_url") {
+      // todo
+    }
+  }
+  return total_tokens;
 }
 
 function fillTemplateWith(input: string, modelConfig: ModelConfig) {
@@ -273,7 +292,7 @@ export const useChatStore = createPersistStore(
         });
       },
 
-      newSession(mask?: Mask) {
+      newSession(mask?: Mask, privateMode?: boolean) {
         const session = createEmptySession();
 
         if (mask) {
@@ -288,6 +307,10 @@ export const useChatStore = createPersistStore(
             },
           };
           session.topic = mask.name;
+        }
+        if (privateMode) {
+          session.inPrivateMode = privateMode;
+          session.topic = Locale.Store.PrivateTopic;
         }
 
         set((state) => ({
@@ -346,6 +369,36 @@ export const useChatStore = createPersistStore(
         );
       },
 
+      // 添加置顶会话的方法
+      pinSession(index: number) {
+        set((state) => {
+          const sessions = [...state.sessions];
+          const session = sessions[index];
+          if (session) {
+            session.pinned = true;
+            session.lastUpdate = Date.now(); // 更新时间戳以触发UI更新
+          }
+          return {
+            sessions,
+          };
+        });
+      },
+
+      // 取消置顶会话的方法
+      unpinSession(index: number) {
+        set((state) => {
+          const sessions = [...state.sessions];
+          const session = sessions[index];
+          if (session) {
+            session.pinned = false;
+            session.lastUpdate = Date.now(); // 更新时间戳以触发UI更新
+          }
+          return {
+            sessions,
+          };
+        });
+      },
+
       currentSession() {
         let index = get().currentSessionIndex;
         const sessions = get().sessions;
@@ -373,6 +426,7 @@ export const useChatStore = createPersistStore(
         content: string,
         attachImages?: string[],
         attachFiles?: UploadFile[],
+        isContinuePrompt?: boolean,
       ) {
         const session = get().currentSession();
         const modelConfig = session.mask.modelConfig;
@@ -388,6 +442,8 @@ export const useChatStore = createPersistStore(
             text: userContent,
           },
         ];
+        // 创建一个变量来存储总的token数量
+        let totalTokens = 0;
 
         if (attachFiles && attachFiles.length > 0) {
           let fileContent = "";
@@ -405,6 +461,7 @@ export const useChatStore = createPersistStore(
           }
           // 添加用户问题
           fileContent += userContent;
+          // totalTokens += estimateTokenLengthInLLM(fileContent);
 
           mContent = [
             {
@@ -456,6 +513,7 @@ export const useChatStore = createPersistStore(
               text: userContent,
             },
           ];
+          // totalTokens += estimateTokenLengthInLLM(userContent);
           mContent = mContent.concat(
             attachImages.map((url) => {
               return {
@@ -479,11 +537,20 @@ export const useChatStore = createPersistStore(
         } else {
           mContent = userContent;
           displayContent = userContent;
+          // totalTokens = estimateTokenLengthInLLM(userContent);
         }
         let userMessage: ChatMessage = createMessage({
           role: "user",
           content: mContent,
+          isContinuePrompt: isContinuePrompt,
+          statistic: {
+            singlePromptTokens: totalTokens ?? 0,
+          },
         });
+        if (userMessage.statistic) {
+          userMessage.statistic.singlePromptTokens =
+            estimateMessageTokenInLLM(userMessage);
+        }
 
         const botMessage: ChatMessage = createMessage({
           role: "assistant",
@@ -698,7 +765,29 @@ export const useChatStore = createPersistStore(
         const sessions = get().sessions;
         const session = sessions.at(sessionIndex);
         const messages = session?.messages;
-        updater(messages?.at(messageIndex));
+        const message = messages?.at(messageIndex);
+
+        // 保存更新前的消息内容
+        const oldContent = message ? getMessageTextContent(message) : "";
+
+        // 应用更新
+        updater(message);
+
+        const newContent = message ? getMessageTextContent(message) : "";
+
+        // 如果是消息内容已更改，更新token计数
+        if (message && newContent !== oldContent) {
+          if (!message.statistic) {
+            message.statistic = {};
+          }
+          if (message.role === "assistant") {
+            message.statistic.completionTokens =
+              estimateMessageTokenInLLM(message);
+          } else {
+            message.statistic.singlePromptTokens =
+              estimateMessageTokenInLLM(message);
+          }
+        }
         set(() => ({ sessions }));
       },
 
@@ -905,6 +994,7 @@ export const useChatStore = createPersistStore(
       updateStat(message: ChatMessage) {
         get().updateCurrentSession((session) => {
           session.stat.charCount += message.content.length;
+          session.stat.tokenCount += estimateMessageTokenInLLM(message);
           // TODO: should update chat count and word count
         });
       },
@@ -922,7 +1012,41 @@ export const useChatStore = createPersistStore(
         const sessions = get().sessions;
         const index = sessions.findIndex((s) => s.id === targetSession.id);
         if (index < 0) return;
+        // Save message content before updates to compare later
+        const messagesBeforeUpdate = JSON.stringify(
+          sessions[index].messages.map((m) =>
+            typeof m.content === "string"
+              ? m.content
+              : getMessageTextContent(m),
+          ),
+        );
         updater(sessions[index]);
+        // Check if any message content has changed and update token stats
+        const updatedSession = sessions[index];
+        const messagesAfterUpdate = updatedSession.messages.map((m) =>
+          typeof m.content === "string" ? m.content : getMessageTextContent(m),
+        );
+        // Update token counts for any changed messages
+        const beforeMessages = JSON.parse(messagesBeforeUpdate);
+        updatedSession.messages.forEach((message, i) => {
+          if (
+            i < beforeMessages.length &&
+            messagesAfterUpdate[i] !== beforeMessages[i]
+          ) {
+            // Content changed, update token count
+            if (!message.statistic) {
+              message.statistic = {};
+            }
+
+            if (message.role === "assistant") {
+              message.statistic.completionTokens =
+                estimateMessageTokenInLLM(message);
+            } else {
+              message.statistic.singlePromptTokens =
+                estimateMessageTokenInLLM(message);
+            }
+          }
+        });
         set(() => ({ sessions }));
       },
       async clearAllChatData() {
@@ -946,7 +1070,7 @@ export const useChatStore = createPersistStore(
   },
   {
     name: StoreKey.Chat,
-    version: 3.3,
+    version: 3.4,
     migrate(persistedState, version) {
       const state = persistedState as any;
       const newState = JSON.parse(
@@ -1017,6 +1141,13 @@ export const useChatStore = createPersistStore(
               s.messages[index].beClear = true;
             }
           }
+        });
+      }
+      // 处理会话置顶功能（pinSession)新增字段的数据迁移
+      if (version < 3.4) {
+        newState.sessions.forEach((s) => {
+          // 为旧数据添加置顶相关字段的默认值
+          s.pinned = s.pinned || false;
         });
       }
 

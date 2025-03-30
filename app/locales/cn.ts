@@ -62,8 +62,12 @@ const cn = {
       search: "搜索聊天",
       edit: "编辑最后一条用户聊天",
       resend: "重新获取 AI 回复",
+      private: "切换无痕状态（新建/退出）",
+      pin: "置顶当前对话",
     },
     InputActions: {
+      Collapse: "折叠功能区",
+      Expand: "展开功能区",
       Stop: "停止响应",
       ToBottom: "滚到最新",
       Theme: {
@@ -71,14 +75,21 @@ const cn = {
         light: "亮色模式",
         dark: "深色模式",
       },
+      PrivateMode: {
+        On: "开启无痕模式",
+        OnToast: "已开启无痕模式，已创建新的无痕会话",
+        Off: "关闭无痕模式",
+        Info: "当前处于无痕模式\n对话阅后即焚",
+        Return: "↩ 点击返回聊天页面",
+      },
       ModelAtSelector: {
         SelectModel: "选择模型",
         AvailableModels: (count: number | undefined) =>
           `${count ?? 0} 个可用模型`,
         NoAvailableModels: "没有找到匹配的模型",
       },
-      MoveCursorToStart: "双击跳转至段首",
-      MoveCursorToEnd: "双击跳转至段尾",
+      MoveCursorToStart: "Ctrl+Shift+Left 跳转至段首",
+      MoveCursorToEnd: "Ctrl+Shift+Right 跳转至段尾",
       Prompt: "快捷指令",
       Masks: "所有面具",
       Clear: "清除聊天",
@@ -87,12 +98,20 @@ const cn = {
       UnsupportedModelForUploadImage: "当前模型不支持上传图片",
       RenameFile: "重命名文件",
       CloudBackup: "云备份",
+      Continue: {
+        Title: "继续补全",
+        isContinueToast: "正在补全中...",
+        ContinuePrompt:
+          "请继续补充完整上文未完成的内容，保持思路和风格的连贯性，直接接续输出。不要重复已有内容，不要添加总结或开场白。根据内容类型（写作、解题、代码等）自动判断合理的结束点。",
+      },
       Translate: {
         Title: "中英互译",
         BlankToast: "输入内容为空，不执行本次翻译",
         isTranslatingToast: "正在翻译中...",
         FailTranslateToast: "本次翻译失败，无权限或请检查模型设置后再次尝试",
         SuccessTranslateToast: "本次翻译已结束并替换输入文本",
+        Undo: "撤销翻译",
+        UndoToast: "已撤销翻译",
         TranslatePrompt:
           "请担任中英文翻译官，请检查信息是否准确，请翻译得自然、流畅和地道，使用优美和高雅的表达方式。\
 文本可能由于复制问题导致冗余的段内换行和页码问题，请根据上下文智能去除。\
@@ -101,6 +120,8 @@ const cn = {
       },
       OCR: {
         Title: "图片文字识别",
+        Screenshot: "截图 OCR",
+        ImportImage: "图片文件 OCR",
         BlankToast: "未检测到图片输入，不执行本次图文识别。",
         isDetectingToast: "正在 OCR 中...",
         FailDetectToast: "本次识别失败，无权限或请检查模型设置后再次尝试",
@@ -121,17 +142,21 @@ const cn = {
           "请帮我识别这张图片中的文字内容,按照上述规则输出结果，确保输出结果的准确性且没有多余内容。",
       },
       Privacy: {
-        Title: "隐私打码(不可撤销)",
+        Title: "隐私打码",
         BlankToast: "输入内容为空，不执行本次打码",
         isPrivacyToast: "正在打码中...",
         FailPrivacyToast: "本次打码失败，无权限或请检查模型设置后再次尝试",
         SuccessPrivacyToast: "本次打码已结束并替换输入内容",
+        Undo: "撤销隐私处理",
+        UndoToast: "已撤销隐私处理",
       },
       UploadFile: {
-        Title: "上传文本文件",
+        Title: (canUploadImage: boolean = false) =>
+          canUploadImage ? "上传图片或文本文件" : "上传文本文件",
         FileTooLarge: "暂不支持上传超过1M的文件",
         TooManyFile: "超出可上传文件数量",
         UnsupportedFileType: "不支持的文件类型",
+        UnsupportToUploadImage: "当前模型未配置视觉功能，不支持上传图片",
         FailToRead: "文件内容读取失败",
         TooManyTokenToPasteAsFile: "粘贴文本数量过大，自动粘贴为附件文本",
         DuplicateFile: (filename: string) =>
@@ -169,6 +194,8 @@ const cn = {
       copyLastCode: "复制最后一个代码块",
       resendLastMessage: "重试最后一个提问",
       showShortcutKey: "显示快捷方式",
+      moveCursorToStart: "跳转至段首",
+      moveCursorToEnd: "跳转至段尾",
       searchChat: "搜索聊天记录",
     },
   },
@@ -210,6 +237,7 @@ const cn = {
     All: "选取全部",
     Latest: "最近几条",
     Clear: "清除选中",
+    HideUserContinueMsg: "过滤“继续补全”消息",
   },
   Memory: {
     Title: "历史摘要",
@@ -364,6 +392,15 @@ const cn = {
       EditModal: {
         Title: "编辑提示词",
       },
+      CustomUserContinuePrompt: {
+        Title: "自定义 “继续补全” 提示词",
+        SubTitle: "自定义补全会话的提示词，用于引导模型补全会话",
+        Enable: "显示“继续补全”对话框",
+        Edit: "编辑",
+        Modal: {
+          Title: "“继续补全”提示词",
+        },
+      },
     },
     HistoryCount: {
       Title: "附带历史消息数",
@@ -496,6 +533,30 @@ const cn = {
       Title: "OCR模型",
       SubTitle: "用于识别输入图片中的文本的模型",
     },
+    Params: {
+      SessionInfo: "会话信息",
+      temperature: {
+        name: "随机温度",
+        tip: "控制生成文本的随机性 (0-2), 值越大创造性越高, 低温抑制知识幻觉",
+      },
+      top_p: {
+        name: "采样概率",
+        tip: "控制生成文本的多样性 (0-1), 值越小内容越单调, 通常与温度二选一使用",
+      },
+      max_tokens: {
+        name: "最大回复",
+        tip: "生成文本的最大长度, 思考模型、视觉对话、代码生成建议设置高回复限制",
+      },
+      presence_penalty: {
+        name: "话题创意",
+        tip: "鼓励模型谈论新话题 (-2 到 2), 值越大越容易扩展到新话题, 降低主题一致性",
+      },
+      frequency_penalty: {
+        name: "重复抑制",
+        tip: "降低重复词汇的可能性 (-2 到 2), 值越大越能避免AI使用重复词汇",
+      },
+      current_history: "当前上下文",
+    },
     Temperature: {
       Title: "随机性 (temperature)",
       SubTitle: "值越大，回复越随机",
@@ -539,12 +600,15 @@ const cn = {
   },
   Store: {
     DefaultTopic: "新的聊天",
+    PrivateTopic: "临时对话窗口，记录不保存",
     BotHello: "你好！有什么需要我帮忙的吗？😎",
     Error: "出错了，稍后重试吧",
     Prompt: {
       History: (content: string) => "这是历史聊天总结作为前情提要：" + content,
-      Topic:
+      old_Topic:
         "使用四到五个字直接返回这句话的简要主题，不要解释、不要标点、不要语气词、不要多余文本，不要加粗，如果没有主题，请直接返回“闲聊”",
+      Topic:
+        "为上述的对话内容主题创建一个简洁的3~8个字的标题，并带有一个表情符号。适合的Emoji可以用来增强理解，但避免使用引号或特殊格式。标题格式为“emoji + 空格 + 标题描述”，语言跟随用户对话，注意控制字数。\n一些标题示例：\n📉 股市趋势\n🍪 完美巧克力饼干配方\n🎵 音乐流媒体演变\n🎮 电子游戏开发见解",
       Summarize:
         "简要总结一下对话内容，用作后续的上下文提示 prompt，控制在 200 字以内",
     },
@@ -627,6 +691,10 @@ const cn = {
         Title: "启用代码折叠",
         SubTitle: "启用之后可以自动折叠/展开过长的代码块",
       },
+      FloatingButton: {
+        Title: "启用悬浮球",
+        SubTitle: "启用之后可以从悬浮球查看当前的会话信息和快捷功能跳转",
+      },
       Share: {
         Title: "分享此面具",
         SubTitle: "生成此面具的直达链接",
@@ -688,6 +756,72 @@ const cn = {
     Messages: "消息",
     Topic: "主题",
     Time: "时间",
+  },
+  CustomProvider: {
+    Title: "自定义 AI 提供商",
+    AddButton: "添加提供商",
+    Count: "共 {count} 个提供商配置",
+    SearchPlaceholder: "搜索 AI 提供商...",
+    Loading: "加载 AI 提供商...",
+    NoProviders: "未找到匹配的 AI 提供商",
+    Edit: "编辑",
+    Delete: "删除",
+    ConfirmDeleteProvider: "确定要删除这个 AI 提供商吗?",
+    Return: "返回",
+    BasicInfo: "基本信息",
+    ModelConfig: "模型配置",
+    APIConfig: "API 配置",
+    AdvancedConfig: "高级设置",
+    Name: "名称",
+    NamePlaceholder: "例如：openai 官方",
+    Type: "类型",
+    CustomAPI: "自定义 API",
+    DescriptionPlaceholder: "添加描述（可选）",
+    ApiKeyPlaceholder: "输入您的 API Key",
+    Show: "显示",
+    Hide: "隐藏",
+    Previous: "上一步",
+    Next: "下一步",
+    SaveChanges: "保存修改",
+    AddProvider: "添加提供商",
+    DefaultOpenAIDescription: "默认 OpenAI API 配置",
+    CustomAPIService: "自定义 API 地址",
+    CustomHostedDescription: "自托管 API 服务",
+    AdvancedOptions: "高级选项",
+    NoAdvancedOptions: "目前没有其他高级选项可以配置。",
+    TypeSubtitle: "选择您的AI服务提供商类型",
+    NameSubtitle: "为您的AI提供商设置一个易于识别的名称",
+    ApiUrlSubtitle: "API 的基础URL。例如OpenAI应使用：https://api.openai.com",
+    ApiKeySubtitle: "您的API密钥将被安全地存储在本地并用于API请求",
+    ApiNameRequired: "请输入 API 名称",
+    ApiUrlRequired: "请输入 API 地址",
+    ApiKeyRequired: "请输入 API key",
+    ApiConfigRequired: "请先填写 API Key 和 API URL",
+    SearchModel: "搜索模型...",
+    Select: {
+      All: "选择全部",
+      Clear: "清除",
+    },
+    RefreshModels: "刷新模型",
+    LoadingModels: "正在加载模型列表...",
+    NoModelsFound: "没有找到模型",
+    NoModelsFoundHint: "确认 API 信息无误后尝试刷新模型列表",
+    NoModels: "暂无模型",
+    NoSelectedModels: "暂无已选模型",
+    ModelsCount: "{count} 个模型",
+    ProviderUpdated: "提供商已更新",
+    ProviderAdded: "提供商已添加",
+    ProviderEnabled: "提供商已启用",
+    ProviderDisabled: "提供商已禁用",
+    ToggleEnable: "点击启用",
+    ToggleDisable: "点击禁用",
+    Status: {
+      Enabled: "已启用",
+      Disabled: "已禁用",
+    },
+    EmptyTitle: "暂无AI提供商",
+    EmptyDescription: '点击"添加提供商"按钮来添加您的提供商',
+    EmptySearchDescription: "尝试使用不同的搜索词或清除搜索",
   },
 };
 

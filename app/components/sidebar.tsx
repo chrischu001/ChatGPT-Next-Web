@@ -134,13 +134,30 @@ export function SideBarContainer(props: {
   onDragStart: (e: MouseEvent) => void;
   shouldNarrow: boolean;
   className?: string;
+  inPrivateMode?: boolean;
 }) {
   const isMobileScreen = useMobileScreen();
   const isIOSMobile = useMemo(
     () => isIOS() && isMobileScreen,
     [isMobileScreen],
   );
-  const { children, className, onDragStart, shouldNarrow } = props;
+  const { children, className, onDragStart, shouldNarrow, inPrivateMode } =
+    props;
+  const [showTooltip, setShowTooltip] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isMobileScreen && inPrivateMode) {
+      setShowTooltip(true);
+    }
+  }, [isMobileScreen, inPrivateMode]);
+
+  const handleTooltipClick = () => {
+    if (isMobileScreen) {
+      navigate(Path.Chat);
+    }
+  };
+
   return (
     <div
       className={`${styles.sidebar} ${className} ${
@@ -151,13 +168,36 @@ export function SideBarContainer(props: {
         transition: isMobileScreen && isIOSMobile ? "none" : undefined,
       }}
     >
-      {children}
+      {inPrivateMode && (
+        <div
+          className={styles["sidebar-mask"]}
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+        >
+          {showTooltip && (
+            <div
+              className={styles["sidebar-tooltip"]}
+              onClick={handleTooltipClick}
+              style={isMobileScreen ? { cursor: "pointer" } : undefined}
+            >
+              <div className={styles["tooltip-content"]}>
+                {Locale.Chat.InputActions.PrivateMode.Info}
+                {isMobileScreen && (
+                  <div>{Locale.Chat.InputActions.PrivateMode.Return}</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div
         className={styles["sidebar-drag"]}
         onPointerDown={(e) => onDragStart(e as any)}
       >
         <DragIcon />
       </div>
+      {children}
     </div>
   );
 }
@@ -233,11 +273,16 @@ export function SideBar(props: { className?: string }) {
   const config = useAppConfig();
   const chatStore = useChatStore();
   const { sidebarTitle, sidebarSubTitle } = useAccessStore();
+  const inPrivateMode = useChatStore((state) => {
+    const currentSession = state.sessions[state.currentSessionIndex];
+    return !!currentSession?.inPrivateMode;
+  });
 
   return (
     <SideBarContainer
       onDragStart={onDragStart}
       shouldNarrow={shouldNarrow}
+      inPrivateMode={inPrivateMode}
       {...props}
     >
       <SideBarHeader
