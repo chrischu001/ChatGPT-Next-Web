@@ -20,6 +20,12 @@ const DEFAULT_OPENAI_URL =
 
 const DEFAULT_ACCESS_STATE = {
   accessCode: "",
+
+  useCustomProvider: false,
+  customProvider_apiKey: "",
+  customProvider_baseUrl: "",
+  customProvider_type: "",
+
   useCustomConfig: false,
 
   provider: ServiceProvider.OpenAI,
@@ -193,10 +199,17 @@ export const useAccessStore = createPersistStore(
           fetchState = 2;
         });
     },
-    fetchAvailableModels(url: string, apiKey: string): Promise<string> {
+    async fetchAvailableModels(
+      url: string,
+      apiKey: string,
+      type: string = "openai",
+    ): Promise<string> {
       // if (fetchState !== 0) return Promise.resolve(DEFAULT_ACCESS_STATE.customModels);
       fetchState = 1;
-      return fetch(`${url.replace(/\/+$/, "")}/v1/models`, {
+      const baseUrl = url.replace(/\/+$/, "");
+      const path = type === "deepseek" ? "/models" : "/v1/models";
+
+      return fetch(`${baseUrl}${path}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -240,7 +253,7 @@ export const useAccessStore = createPersistStore(
             )
             .map((model: any) => `${model.id}@OpenAI`)
             .join(",");
-          console.log("availableModels", availableModels);
+          // console.log("availableModels", availableModels);
           showToast("fetch and update models list successfully");
           return `-all,${availableModels}`;
         })
@@ -250,6 +263,183 @@ export const useAccessStore = createPersistStore(
           return DEFAULT_ACCESS_STATE.customModels;
         })
         .finally(() => (fetchState = 2));
+    },
+    async checkSiliconFlowBalance(
+      apiKey: string,
+      baseUrl: string,
+    ): Promise<{
+      isValid: boolean;
+      balance?: string;
+      totalBalance?: string;
+      chargeBalance?: string;
+      currency?: string;
+      error?: string;
+    }> {
+      if (!apiKey) {
+        return Promise.resolve({
+          isValid: false,
+          error: "API key is required",
+        });
+      }
+      if (!baseUrl) {
+        baseUrl = "https://api.siliconflow.cn";
+      }
+      return fetch(`${baseUrl.replace(/\/+$/, "")}/v1/user/info`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+      })
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error(`${res.status} - ${res.statusText}`);
+          }
+          return res.json();
+        })
+        .then((res) => {
+          if (res.code === 20000 && res.status === true && res.data) {
+            return {
+              isValid: true,
+              currency: "￥",
+              balance: res.data.balance,
+              totalBalance: res.data.totalBalance,
+              chargeBalance: res.data.chargeBalance,
+            };
+          } else {
+            return {
+              isValid: false,
+              error: res.message || "Invalid response format",
+            };
+          }
+        })
+        .catch((error) => {
+          console.error("[Access] failed to check SiliconFlow balance:", error);
+          return {
+            isValid: false,
+            error: error.message || "Failed to check balance",
+          };
+        });
+    },
+    async checkDeepSeekBalance(
+      apiKey: string,
+      baseUrl?: string,
+    ): Promise<{
+      isValid: boolean;
+      isAvailable?: boolean;
+      balance?: string; // 总余额（等同于 totalBalance）
+      totalBalance?: string; // 总余额（和 balance 相同）
+      chargeBalance?: string; // 充值余额（即 toppedUpBalance）
+      currency?: string;
+      error?: string;
+    }> {
+      // 参数验证
+      if (!apiKey) {
+        return {
+          isValid: false,
+          error: "API key is required",
+        };
+      }
+
+      // 设置默认 baseUrl
+      baseUrl = baseUrl || "https://api.deepseek.com";
+
+      try {
+        // 调用 DeepSeek API
+        const response = await fetch(
+          `${baseUrl.replace(/\/+$/, "")}/user/balance`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${apiKey}`,
+              Accept: "application/json",
+            },
+          },
+        );
+
+        // 检查响应状态
+        if (!response.ok) {
+          throw new Error(`${response.status} - ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        // 查找 CNY 的余额信息
+        const cnyBalance = data.balance_infos?.find(
+          (info: any) => info.currency === "CNY",
+        );
+
+        return {
+          isValid: true,
+          isAvailable: data.is_available,
+          currency: "￥",
+          balance: cnyBalance?.total_balance, // 总余额
+          totalBalance: cnyBalance?.total_balance, // 总余额（和 balance 相同）
+          chargeBalance: cnyBalance?.topped_up_balance, // 充值余额
+        };
+      } catch (error) {
+        console.error("[DeepSeek] Failed to check balance:", error);
+        return {
+          isValid: false,
+          error:
+            error instanceof Error ? error.message : "Unknown error occurred",
+        };
+      }
+    },
+    async checkCustomOpenaiBalance(
+      apiKey: string,
+      baseUrl: string,
+    ): Promise<{
+      isValid: boolean;
+      totalBalance?: string; // 可用额度 (USD)
+      currency?: string;
+      error?: string;
+    }> {
+      // 参数校验
+      if (!apiKey || !baseUrl) {
+        return {
+          isValid: false,
+          error: "API key 和 baseUrl 不能为空",
+        };
+      }
+      // 规范化 API 地址
+      const apiUrl = baseUrl.replace(/\/+$/, "");
+      try {
+        // 1. 获取订阅信息（总额度）
+        const subscriptionRes = await fetch(
+          `${apiUrl}/dashboard/billing/subscription`,
+          {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          },
+        );
+        const { hard_limit_usd } = await subscriptionRes.json();
+        const total = hard_limit_usd?.toFixed(2) || "0.00";
+        // 2. 获取本月使用量
+        const today = new Date();
+        const startDate = `${today.getFullYear()}-${(today.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}-01`;
+        const endDate = `${today.getFullYear()}-${(today.getMonth() + 1)
+          .toString()
+          .padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+
+        const usageRes = await fetch(
+          `${apiUrl}/dashboard/billing/usage?start_date=${startDate}&end_date=${endDate}`,
+          { headers: { Authorization: `Bearer ${apiKey}` } },
+        );
+        const { total_usage } = await usageRes.json();
+        const used = (total_usage / 100).toFixed(2); // 转换为美元
+
+        // 3. 计算剩余额度
+        const remaining = (parseFloat(total) - parseFloat(used)).toFixed(2);
+        return { isValid: true, totalBalance: remaining, currency: "$" };
+      } catch (error) {
+        console.error("[OpenAI] Failed to check balance:", error);
+        return {
+          isValid: false,
+          error:
+            error instanceof Error ? error.message : "Unknown error occurred",
+        };
+      }
     },
   }),
   {

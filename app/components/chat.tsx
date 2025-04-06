@@ -123,6 +123,7 @@ import {
   textFileExtensions,
   maxFileSizeInKB,
   minTokensForPastingAsFile,
+  StoreKey,
 } from "../constant";
 import { Avatar } from "./emoji";
 import { ContextPrompts, MaskAvatar, MaskConfig } from "./mask";
@@ -136,12 +137,8 @@ import {
 import { prettyObject } from "../utils/format";
 import { ExportMessageModal } from "./exporter";
 import { getClientConfig } from "../config/client";
-import { useAllModels } from "../utils/hooks";
-import {
-  LLMModelProvider,
-  MultimodalContent,
-  getClientApi,
-} from "../client/api";
+import { useAllModelsWithCustomProviders } from "../utils/hooks";
+import { Model, MultimodalContent, getClientApi } from "../client/api";
 
 import { ClientApi } from "../client/api";
 import { createTTSPlayer } from "../utils/audio";
@@ -157,14 +154,6 @@ const Markdown = dynamic(async () => (await import("./markdown")).Markdown, {
   loading: () => <LoadingIcon />,
 });
 
-interface Model {
-  available: boolean;
-  name: string;
-  displayName?: string;
-  description?: string;
-  provider?: LLMModelProvider;
-  isDefault?: boolean;
-}
 export function SessionConfigModel(props: { onClose: () => void }) {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
@@ -528,6 +517,7 @@ export function ChatActions(props: {
   const navigate = useNavigate();
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
+  const access = useAccessStore();
 
   // translate
   const [isTranslating, setIsTranslating] = useState(false);
@@ -977,6 +967,38 @@ export function ChatActions(props: {
       m.name === currentModel &&
       m.provider?.providerName === currentProviderName,
   )?.displayName;
+  let storedProviders = safeLocalStorage().getItem(StoreKey.CustomProvider);
+  let current_apiKey = null;
+  let current_baseUrl = null;
+  let current_type = null;
+  if (storedProviders) {
+    try {
+      storedProviders = JSON.parse(storedProviders);
+
+      // 确保 storedProviders 是数组
+      if (Array.isArray(storedProviders)) {
+        const provider = storedProviders.find(
+          (prov) => prov.name === currentProviderName,
+        );
+
+        if (provider) {
+          current_apiKey = provider.apiKey;
+          current_baseUrl = provider.baseUrl;
+          current_type = provider.type;
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing stored providers:", error);
+    }
+  }
+  if (current_baseUrl && current_apiKey) {
+    access.useCustomProvider = true;
+    access.customProvider_apiKey = current_apiKey;
+    access.customProvider_baseUrl = current_baseUrl;
+    access.customProvider_type = current_type;
+  } else {
+    access.useCustomProvider = false;
+  }
   const canUploadImage = isVisionModel(currentModel);
 
   const [showModelSelector, setShowModelSelector] = useState(false);
@@ -1124,7 +1146,7 @@ export function ChatActions(props: {
           icon={<PrivacyModeIcon />}
           onClick={() => {
             if (!session?.inPrivateMode) {
-              chatStore.newSession(undefined, true);
+              chatStore.newSession(session.mask, true);
               showToast(Locale.Chat.InputActions.PrivateMode.OnToast);
             } else {
               chatStore.deleteSession(chatStore.currentSessionIndex);
@@ -1143,7 +1165,9 @@ export function ChatActions(props: {
             defaultSelectedValue={`${currentModel}@${currentProviderName}`}
             items={models.map((m) => ({
               title:
-                m?.provider?.providerName?.toLowerCase() === "openai"
+                m?.provider?.providerName?.toLowerCase() === "openai" ||
+                m?.provider?.providerType === "custom-provider" ||
+                m?.provider?.providerName === m.name
                   ? `${m.displayName}`
                   : `${m.displayName} (${m?.provider?.providerName})`,
               subTitle: m.description,
@@ -1626,7 +1650,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
           session.messages[session.messages.length - 1].beClear = true;
         }
       }),
-    new: () => chatStore.newSession(),
+    new: () => chatStore.newSession(session.mask),
     search: () => navigate(Path.SearchChat),
     newm: () => navigate(Path.NewChat),
     prev: () => chatStore.nextSession(-1),
@@ -1636,7 +1660,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     pin: () => chatStore.pinSession(chatStore.currentSessionIndex),
     private: () => {
       if (!chatStore.sessions[chatStore.currentSessionIndex]?.inPrivateMode) {
-        chatStore.newSession(undefined, true);
+        chatStore.newSession(session.mask, true);
         showToast(Locale.Chat.InputActions.PrivateMode.OnToast);
       } else {
         chatStore.deleteSession(chatStore.currentSessionIndex);
@@ -1758,7 +1782,9 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
 
   const formatModelItem = (model: Model) => ({
     title:
-      model?.provider?.providerName?.toLowerCase() === "openai"
+      model?.provider?.providerName?.toLowerCase() === "openai" ||
+      model?.provider?.providerType === "custom-provider" ||
+      model?.provider?.providerName === model.name
         ? `${model.displayName || model.name}`
         : `${model.displayName || model.name} (${model?.provider
             ?.providerName})`,
@@ -2541,7 +2567,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       ) {
         event.preventDefault();
         setTimeout(() => {
-          chatStore.newSession();
+          chatStore.newSession(session.mask);
           navigate(Path.Chat);
         }, 10);
       }
@@ -3106,9 +3132,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                       <div className={styles["item-icon"]}>
                         <Avatar model={item.title as string} />
                       </div>
-                      <div className={styles["item-title"]}>
-                        {item.title.split(" (")[0]}
-                      </div>
+                      <div className={styles["item-title"]}>{item.title}</div>
                     </div>
                     {item.subTitle && (
                       <div className={styles["item-description"]}>
@@ -3362,8 +3386,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
 export function Chat() {
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
-  const allModels = useAllModels();
-  const hasUpdatedDisplayName = useRef(false);
+  const allModels = useAllModelsWithCustomProviders();
 
   const modelTable = useMemo(() => {
     const filteredModels = allModels.filter((m) => m.available);
@@ -3383,7 +3406,6 @@ export function Chat() {
   useEffect(() => {
     // 仅在 session 最后一条消息 id 变化时执行，即有新的消息进入队列
 
-    let messagesChanged = false;
     for (let i = 0; i < session.messages.length; i++) {
       const message = session.messages[i];
       if (message.role !== "user" && !message.displayName && message.model) {

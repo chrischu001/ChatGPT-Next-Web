@@ -11,6 +11,8 @@ import DeleteIcon from "../icons/delete.svg";
 import MaskIcon from "../icons/mask.svg";
 import DragIcon from "../icons/drag.svg";
 import DiscoveryIcon from "../icons/discovery.svg";
+import CustomProviderIcon from "../icons/custom-models.svg";
+
 import parse from "html-react-parser";
 
 import Locale from "../locales";
@@ -375,6 +377,15 @@ export function SideBar(props: { className?: string }) {
                 />
               </a>
             </div>
+            <div className={styles["sidebar-action"]}>
+              <Link to={Path.CustomProvider}>
+                <IconButton
+                  aria={Locale.CustomProvider.Title}
+                  icon={<CustomProviderIcon />}
+                  shadow
+                />
+              </Link>
+            </div>
           </>
         }
         secondaryAction={
@@ -383,7 +394,7 @@ export function SideBar(props: { className?: string }) {
             text={shouldNarrow ? undefined : Locale.Home.NewChat}
             onClick={() => {
               if (config.dontShowMaskSplashScreen) {
-                chatStore.newSession();
+                chatStore.newSession(chatStore.currentSession().mask);
                 navigate(Path.Chat);
               } else {
                 navigate(Path.NewChat);

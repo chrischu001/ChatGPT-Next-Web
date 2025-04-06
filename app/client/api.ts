@@ -3,6 +3,7 @@ import {
   ACCESS_CODE_PREFIX,
   ModelProvider,
   ServiceProvider,
+  REPO_URL,
 } from "../constant";
 import { ChatMessage, ModelType, useAccessStore, useChatStore } from "../store";
 import { ChatGPTApi } from "./platforms/openai";
@@ -76,6 +77,7 @@ export interface RichMessage {
 export interface ChatOptions {
   messages: RequestMessage[];
   config: LLMConfig;
+  type?: "chat" | "topic" | "compress";
 
   onUpdate?: (message: string, chunk: string) => void;
   onFinish: (message: string | RichMessage, responseRes: Response) => void;
@@ -109,10 +111,19 @@ export abstract class LLMApi {
 
 type ProviderName = "openai" | "azure" | "claude" | "palm";
 
-interface Model {
+// interface Model {
+//   name: string;
+//   provider: ProviderName;
+//   ctxlen: number;
+// }
+
+export interface Model {
+  available: boolean;
   name: string;
-  provider: ProviderName;
-  ctxlen: number;
+  displayName?: string;
+  description?: string;
+  provider?: LLMModelProvider;
+  isDefault?: boolean;
 }
 
 interface ChatProvider {
@@ -126,6 +137,17 @@ interface ChatProvider {
 
   chat: () => void;
   usage: () => void;
+}
+
+export interface userCustomProvider {
+  id: string;
+  name: string;
+  apiKey: string;
+  baseUrl: string;
+  type: string;
+  status: "active" | "inactive";
+  models?: Model[];
+  description?: string;
 }
 
 export class ClientApi {
@@ -160,8 +182,7 @@ export class ClientApi {
       .concat([
         {
           from: "human",
-          value:
-            "Share from [NextChat]: https://github.com/QAbot-zh/ChatGPT-Next-Web",
+          value: `Share from [NextChat]: ${REPO_URL}`,
         },
       ]);
     // 敬告二开开发者们，为了开源大模型的发展，请不要修改上述消息，此消息用于后续数据清洗使用
@@ -191,6 +212,19 @@ export class ClientApi {
   }
 }
 
+function selectApiKey(apiKeyString: string): string {
+  if (!apiKeyString) return "";
+  // Split the string into an array of keys, removing empty strings
+  const keys = apiKeyString
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+  // If only one key, return it directly
+  if (keys.length <= 1) return apiKeyString.trim();
+  // Random selection
+  const randomIndex = Math.floor(Math.random() * keys.length);
+  return keys[randomIndex];
+}
 export function getHeaders(ignoreHeaders: boolean = false) {
   const accessStore = useAccessStore.getState();
   const chatStore = useChatStore.getState();
@@ -210,6 +244,8 @@ export function getHeaders(ignoreHeaders: boolean = false) {
     ? accessStore.googleApiKey
     : isAzure
     ? accessStore.azureApiKey
+    : accessStore.useCustomProvider
+    ? selectApiKey(accessStore.customProvider_apiKey)
     : accessStore.openaiApiKey;
   const clientConfig = getClientConfig();
   const makeBearer = (s: string) => `${isAzure ? "" : "Bearer "}${s.trim()}`;
