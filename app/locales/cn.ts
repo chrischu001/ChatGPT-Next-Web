@@ -113,8 +113,9 @@ const cn = {
         Undo: "撤销翻译",
         UndoToast: "已撤销翻译",
         TranslatePrompt:
-          "请担任中英文翻译官，请检查信息是否准确，请翻译得自然、流畅和地道，使用优美和高雅的表达方式。\
-文本可能由于复制问题导致冗余的段内换行和页码问题，请根据上下文智能去除。\
+          "请担任中英文翻译官，你需要根据输入文本的语言自动识别语种并将其翻译成另一种语言（中文翻译成英文，英文翻译成中文）。\
+请翻译得准确、自然、流畅和地道，使用优美和高雅的表达方式。\
+文本可能由于复制问题导致冗余的段内换行和数字页码问题，请根据上下文智能去除。\
 无论对方回复什么，你只需将内容翻译为中文或英文。您应该只回复您翻译后的内容，而不应回复其他任何内容。不要写解释。\
 这是你需要翻译的内容：\n",
       },
@@ -291,7 +292,8 @@ const cn = {
     },
     InjectSystemPrompts: {
       Title: "注入系统级提示信息",
-      SubTitle: "强制给每次请求的消息列表开头添加一个模拟 ChatGPT 的系统提示",
+      SubTitle:
+        "强制给每次请求的消息列表开头添加一个优化输出内容格式的系统提示",
     },
     InputTemplate: {
       Title: "用户输入预处理",
@@ -515,7 +517,7 @@ const cn = {
       SubTitle: "点击展开对话模型设置",
       CloseSubTile: "收起对话模型设置",
     },
-    Model: "模型 (model)",
+    Model: "对话模型 (model)",
     StreamUsageEnable: {
       Title: "开启原生流式用量统计",
       SubTitle:
@@ -535,6 +537,7 @@ const cn = {
     },
     Params: {
       SessionInfo: "会话信息",
+      current_history: "当前上下文",
       temperature: {
         name: "随机温度",
         tip: "控制生成文本的随机性 (0-2), 值越大创造性越高, 低温抑制知识幻觉",
@@ -555,7 +558,10 @@ const cn = {
         name: "重复抑制",
         tip: "降低重复词汇的可能性 (-2 到 2), 值越大越能避免AI使用重复词汇",
       },
-      current_history: "当前上下文",
+      reasoning_effort: {
+        name: "推理努力",
+        tip: "修改模型推理努力程序，当前仅grok适用",
+      },
     },
     Temperature: {
       Title: "随机性 (temperature)",
@@ -576,6 +582,19 @@ const cn = {
     FrequencyPenalty: {
       Title: "频率惩罚度 (frequency_penalty)",
       SubTitle: "值越大，越有可能降低重复字词",
+    },
+    ReasoningEffort: {
+      Title: "推理努力程度(reasoning_effort)",
+      SubTitle:
+        "约束推理模型的努力程度和思考时间，仅适用于支持该参数的模型和供应商（当前仅grok)",
+    },
+    ParameterOverride: {
+      Title: "参数覆盖",
+      SubTitle: "用于覆盖请求参数，使用 json 格式",
+      ValidJson: "✓ 有效的 json 设置",
+      InvalidJson: "✗ json 格式错误",
+      EnableInfo: "已添加覆盖参数",
+      EmptyParam: "覆盖参数内容为空",
     },
     TTS: {
       Enable: {
@@ -761,7 +780,7 @@ const cn = {
     Title: "自定义 AI 提供商",
     AddButton: "添加提供商",
     Count: "共 {count} 个提供商配置",
-    SearchPlaceholder: "搜索 AI 提供商...",
+    SearchPlaceholder: "搜索提供商名称或模型名称...",
     Loading: "加载 AI 提供商...",
     NoProviders: "未找到匹配的 AI 提供商",
     Edit: "编辑",
@@ -777,7 +796,7 @@ const cn = {
     Type: "类型",
     CustomAPI: "自定义 API",
     DescriptionPlaceholder: "添加描述（可选）",
-    ApiKeyPlaceholder: "输入您的 API Key",
+    ApiKeyPlaceholder: "输入您的 API Key，可以逗号或空格分隔多个密钥",
     Show: "显示",
     Hide: "隐藏",
     Previous: "上一步",
@@ -831,12 +850,17 @@ const cn = {
     KeyListView: "密钥：列表视图",
     NormalView: "密钥：普通视图",
     AddKey: "添加密钥",
+    ClearInput: "清除输入",
+    RefreshBalance: "刷新余额",
+    RemoveInvalidKey: "删除无效密钥",
     NoKeysAdded: "尚未添加任何API密钥",
     NewKeyPlaceholder: "输入新的API密钥",
     EditModel: {
-      EditDisplayName: "编辑显示名称",
+      EditModelFeature: "编辑模型特性",
       ModelID: "模型ID：",
       DisplayName: "显示名称：",
+      Description: "模型描述：",
+      VisionSupport: "视觉支持：",
       Cancel: "取消",
       Save: "保存",
       ErrorJson: "无效的格式，请提供有效的JSON对象",

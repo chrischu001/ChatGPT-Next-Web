@@ -120,7 +120,7 @@ const en: LocaleType = {
         Undo: "Undo Translate",
         UndoToast: "Undo Translate Success",
         TranslatePrompt:
-          "Please act as a Chinese-English interpreter, verify the accuracy of the information, and translate it naturally, fluently, and idiomatically, using beautiful and elegant expressions. The text may contain redundant line breaks within paragraphs and pagination issues due to copying problems, which should be intelligently removed in context. Regardless of what the other party replies, you should only translate the content. You should only respond with the translated content and not with any other information. Do not provide explanations. This is the content you need to translate: \n",
+          "Please act as a professional Chinese-English interpreter. First, identify the language of the input text and then accurately translate it into the other language (translate Chinese into English and English into Chinese). Ensure the translation is natural, fluent, idiomatic, and uses beautiful and elegant expressions. The text may contain redundant line breaks within paragraphs or pagination issues due to copying problems; please intelligently remove these based on context to produce a coherent and smooth translation. Regardless of the content you receive, you should only provide the translated text—do not include the original text, any explanations, or any other information.This is the content you need to translate: \n",
       },
       OCR: {
         Title: "OCR",
@@ -560,28 +560,32 @@ const en: LocaleType = {
     //   current_history: "current_history",
     // },
     Params: {
-      SessionInfo: "会话信息",
+      SessionInfo: "Session Information",
+      current_history: "Current History",
       temperature: {
-        name: "随机温度",
-        tip: "控制生成文本的随机性 (0-2), 值越大创造性越高, 低温抑制知识幻觉",
+        name: "Randomness (Temperature)",
+        tip: "Controls the randomness of generated text (0–2). Higher values increase creativity, while lower values reduce hallucinations.",
       },
       top_p: {
-        name: "采样概率",
-        tip: "控制生成文本的多样性 (0-1), 值越小内容越单调, 通常与温度二选一使用",
+        name: "Sampling Probability (Top-p)",
+        tip: "Controls the diversity of generated text (0–1). Lower values make the content more focused. Typically used as an alternative to temperature.",
       },
       max_tokens: {
-        name: "最大回复",
-        tip: "生成文本的最大长度, 思考模型、视觉对话、代码生成建议设置高回复限制",
+        name: "Maximum Response Length",
+        tip: "Maximum length of generated text. For reasoning, visual dialogue, or code generation, a higher limit is recommended.",
       },
       presence_penalty: {
-        name: "话题创意",
-        tip: "鼓励模型谈论新话题 (-2 到 2), 值越大越容易扩展到新话题, 降低主题一致性",
+        name: "Topic Novelty",
+        tip: "Encourages the model to explore new topics (-2 to 2). Higher values promote topic changes but may reduce coherence.",
       },
       frequency_penalty: {
-        name: "重复抑制",
-        tip: "降低重复词汇的可能性 (-2 到 2), 值越大越能避免AI使用重复词汇",
+        name: "Repetition Penalty",
+        tip: "Reduces the likelihood of repeating words (-2 to 2). Higher values help avoid repetitive language.",
       },
-      current_history: "当前上下文",
+      reasoning_effort: {
+        name: "Reason Effort",
+        tip: "Modified model inference effort program, currently only grok",
+      },
     },
     Temperature: {
       Title: "Temperature",
@@ -604,6 +608,19 @@ const en: LocaleType = {
       Title: "Frequency Penalty",
       SubTitle:
         "A larger value decreasing the likelihood to repeat the same line",
+    },
+    ReasoningEffort: {
+      Title: "Reasoning Effort",
+      SubTitle:
+        "Effort and thought time of the constrained inference model, only for models and vendors that support this parameter (currently only grok)",
+    },
+    ParameterOverride: {
+      Title: "Parameter Override",
+      SubTitle: "Override model parameters with custom JSON configuration",
+      ValidJson: "✓ Valid JSON",
+      InvalidJson: "✗ Invalid JSON format",
+      EnableInfo: "Parameter Override Enabled",
+      EmptyParam: "No parameters specified",
     },
     TTS: {
       Enable: {
@@ -788,7 +805,7 @@ const en: LocaleType = {
     Title: "Custom AI Provider",
     AddButton: "Add Provider",
     Count: "Total {count} provider configurations",
-    SearchPlaceholder: "Search AI providers...",
+    SearchPlaceholder: "Search AI providers or available models...",
     Loading: "Loading AI providers...",
     NoProviders: "No matching AI providers found",
     Edit: "Edit",
@@ -860,12 +877,17 @@ const en: LocaleType = {
     KeyListView: "Key List View",
     NormalView: "Normal View",
     AddKey: "Add Key",
+    ClearInput: "Clear Input",
+    RefreshBalance: "Refresh Balance",
+    RemoveInvalidKey: "Remove Invalid Key",
     NoKeysAdded: "No API Keys Added Yet",
     NewKeyPlaceholder: "Enter a new API key",
     EditModel: {
-      EditDisplayName: "Edit model's DisplayName",
+      EditModelFeature: "Edit model's features",
       ModelID: "Model ID: ",
       DisplayName: "Display Name: ",
+      Description: "Description: ",
+      VisionSupport: "Enable Vision:",
       Cancel: "Cancel",
       Save: "Save",
       ErrorJson: "Invalid format. Please provide a valid JSON object.",

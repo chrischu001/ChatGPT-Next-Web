@@ -69,25 +69,29 @@ export const DEFAULT_CONFIG = {
     temperature: 0.5,
     temperature_enabled: true,
     top_p: 0.99,
-    top_p_enabled: true,
+    top_p_enabled: false,
     max_tokens: 4000,
     max_tokens_enabled: true,
     presence_penalty: 0,
-    presence_penalty_enabled: true,
+    presence_penalty_enabled: false,
     frequency_penalty: 0,
-    frequency_penalty_enabled: true,
+    frequency_penalty_enabled: false,
+    reasoning_effort: "none",
     sendMemory: true,
     historyMessageCount: 4,
     compressMessageLengthThreshold: 1000,
     compressModel: "gpt-4o-mini" as ModelType,
-    compressProviderName: "OpenAI" as ServiceProvider,
+    compressProviderName: "" as ServiceProvider,
     translateModel: "gpt-4o-mini" as ModelType,
-    translateProviderName: "OpenAI" as ServiceProvider,
+    translateProviderName: "" as ServiceProvider,
     ocrModel: "gpt-4o-mini" as ModelType,
-    ocrProviderName: "OpenAI" as ServiceProvider,
+    ocrProviderName: "" as ServiceProvider,
     enableInjectSystemPrompts: false,
     enableStreamUsageOptions: false,
     template: config?.template ?? DEFAULT_INPUT_TEMPLATE,
+    // 参数覆盖变量
+    paramOverrideContent: "",
+    enableParamOverride: false,
   },
 
   ttsConfig: {
@@ -188,7 +192,7 @@ export const useAppConfig = createPersistStore(
   }),
   {
     name: StoreKey.Config,
-    version: 4.1,
+    version: 4.2,
 
     merge(persistedState, currentState) {
       const state = persistedState as ChatConfig | undefined;
@@ -213,8 +217,8 @@ export const useAppConfig = createPersistStore(
 
       if (version < 3.4) {
         state.modelConfig.sendMemory = true;
-        state.modelConfig.historyMessageCount = 8;
-        state.modelConfig.compressMessageLengthThreshold = 2000;
+        state.modelConfig.historyMessageCount = 4;
+        state.modelConfig.compressMessageLengthThreshold = 1000;
         state.modelConfig.frequency_penalty = 0;
         state.modelConfig.top_p = 1;
         state.modelConfig.template = DEFAULT_INPUT_TEMPLATE;
@@ -258,12 +262,14 @@ export const useAppConfig = createPersistStore(
         state.modelConfig.ocrProviderName =
           DEFAULT_CONFIG.modelConfig.ocrProviderName;
       }
-      if (version < 4.1) {
+      if (version < 4.2) {
         state.modelConfig.temperature_enabled = true;
-        state.modelConfig.top_p_enabled = true;
-        state.modelConfig.max_tokens_enabled = true;
-        state.modelConfig.presence_penalty_enabled = true;
-        state.modelConfig.frequency_penalty_enabled = true;
+        state.modelConfig.top_p_enabled = false;
+        state.modelConfig.max_tokens_enabled = false;
+        state.modelConfig.presence_penalty_enabled = false;
+        state.modelConfig.frequency_penalty_enabled = false;
+        state.modelConfig.enableStreamUsageOptions = false;
+        state.modelConfig.reasoning_effort = "none";
       }
       return state as any;
     },

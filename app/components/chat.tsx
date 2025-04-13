@@ -28,7 +28,7 @@ import ResetIcon from "../icons/reload.svg";
 import BreakIcon from "../icons/break.svg";
 import SettingsIcon from "../icons/chat-settings.svg";
 import DeleteIcon from "../icons/clear.svg";
-import PinIcon from "../icons/pin.svg";
+// import PinIcon from "../icons/pin.svg";
 import EditIcon from "../icons/rename.svg";
 import EditToInputIcon from "../icons/edit_input.svg";
 import ConfirmIcon from "../icons/confirm.svg";
@@ -538,7 +538,6 @@ export function ChatActions(props: {
   // continue chat
   const [isContinue, setIsContinue] = useState(false);
   // model
-  const { translateModel, ocrModel } = useAccessStore();
 
   // 监听用户输入变化，如果输入改变则重置撤销状态
   useEffect(() => {
@@ -578,18 +577,38 @@ export function ChatActions(props: {
     setIsTranslating(true);
     showToast(Locale.Chat.InputActions.Translate.isTranslatingToast);
     //
-    const [translateModelName, translateProviderName] =
-      translateModel.split(/@(?=[^@]*$)/);
-    if (translateModelName) {
-      session.mask.modelConfig.translateModel = translateModelName;
-      if (translateProviderName) {
-        session.mask.modelConfig.translateProviderName =
-          translateProviderName as ServiceProvider;
-      }
-    }
     const modelConfig = session.mask.modelConfig;
+    let translateModel = modelConfig.translateModel;
+    let providerName = modelConfig.translateProviderName;
+    if (!providerName && access.translateModel) {
+      let providerNameStr;
+      [translateModel, providerNameStr] = access.translateModel.split("@");
+      providerName = providerNameStr as ServiceProvider;
+    }
+    try {
+      const storedProvidersData = safeLocalStorage().getItem(
+        StoreKey.CustomProvider,
+      );
+      const providers = storedProvidersData
+        ? JSON.parse(storedProvidersData)
+        : [];
+      const provider = Array.isArray(providers)
+        ? providers.find((provider) => provider.name === providerName)
+        : null;
 
-    const providerName = modelConfig.translateProviderName;
+      if (provider?.baseUrl && provider?.apiKey) {
+        // 使用解构赋值和可选链操作符
+        access.useCustomProvider = true;
+        access.customProvider_apiKey = provider.apiKey;
+        access.customProvider_baseUrl = provider.baseUrl;
+        access.customProvider_type = provider.type;
+      } else {
+        access.useCustomProvider = false;
+      }
+    } catch (error) {
+      console.error("Error processing custom providers:", error);
+      access.useCustomProvider = false;
+    }
     const api: ClientApi = getClientApi(providerName);
     api.llm.chat({
       messages: [
@@ -599,7 +618,7 @@ export function ChatActions(props: {
         },
       ],
       config: {
-        model: modelConfig.translateModel,
+        model: translateModel,
         stream: false,
       },
       onFinish(message, responseRes) {
@@ -644,16 +663,40 @@ export function ChatActions(props: {
     setIsOCRing(true);
     showToast(Locale.Chat.InputActions.OCR.isDetectingToast);
     //
-    const [ocrModelName, ocrProviderName] = ocrModel.split(/@(?=[^@]*$)/);
-    if (ocrModelName) {
-      session.mask.modelConfig.ocrModel = ocrModelName;
-      if (ocrProviderName) {
-        session.mask.modelConfig.translateProviderName =
-          ocrProviderName as ServiceProvider;
-      }
-    }
     const modelConfig = session.mask.modelConfig;
-    const providerName = modelConfig.translateProviderName;
+    let ocrModel = modelConfig.ocrModel;
+    let providerName = modelConfig.ocrProviderName;
+    if (!providerName && access.ocrModel) {
+      let providerNameStr;
+      [ocrModel, providerNameStr] = access.ocrModel.split("@");
+      providerName = providerNameStr as ServiceProvider;
+    }
+
+    try {
+      const storedProvidersData = safeLocalStorage().getItem(
+        StoreKey.CustomProvider,
+      );
+      const providers = storedProvidersData
+        ? JSON.parse(storedProvidersData)
+        : [];
+
+      const provider = Array.isArray(providers)
+        ? providers.find((provider) => provider.name === providerName)
+        : null;
+
+      if (provider?.baseUrl && provider?.apiKey) {
+        // 使用解构赋值和可选链操作符
+        access.useCustomProvider = true;
+        access.customProvider_apiKey = provider.apiKey;
+        access.customProvider_baseUrl = provider.baseUrl;
+        access.customProvider_type = provider.type;
+      } else {
+        access.useCustomProvider = false;
+      }
+    } catch (error) {
+      console.error("Error processing custom providers:", error);
+      access.useCustomProvider = false;
+    }
 
     const api: ClientApi = getClientApi(providerName);
     let textValue = Locale.Chat.InputActions.OCR.DetectPrompt;
@@ -677,7 +720,7 @@ export function ChatActions(props: {
         },
       ],
       config: {
-        model: modelConfig.ocrModel,
+        model: ocrModel,
         stream: false,
       },
       onFinish(message, responseRes) {
@@ -962,44 +1005,48 @@ export function ChatActions(props: {
   const currentModel = session.mask.modelConfig.model;
   const currentProviderName =
     session.mask.modelConfig?.providerName || ServiceProvider.OpenAI;
-  const currentModelDisplayName = models.find(
-    (m) =>
-      m.name === currentModel &&
-      m.provider?.providerName === currentProviderName,
-  )?.displayName;
-  let storedProviders = safeLocalStorage().getItem(StoreKey.CustomProvider);
-  let current_apiKey = null;
-  let current_baseUrl = null;
-  let current_type = null;
-  if (storedProviders) {
+  const [currentModelInfo, setCurrentModelInfo] = useState<Model | null>(null);
+  useEffect(() => {
+    const _currentModel =
+      models.find(
+        (m) =>
+          m.name === currentModel &&
+          m.provider?.providerName === currentProviderName,
+      ) || null;
+    setCurrentModelInfo(_currentModel);
     try {
-      storedProviders = JSON.parse(storedProviders);
+      const storedProvidersData = safeLocalStorage().getItem(
+        StoreKey.CustomProvider,
+      );
+      const providers = storedProvidersData
+        ? JSON.parse(storedProvidersData)
+        : [];
 
-      // 确保 storedProviders 是数组
-      if (Array.isArray(storedProviders)) {
-        const provider = storedProviders.find(
-          (prov) => prov.name === currentProviderName,
-        );
-
-        if (provider) {
-          current_apiKey = provider.apiKey;
-          current_baseUrl = provider.baseUrl;
-          current_type = provider.type;
-        }
+      const provider = Array.isArray(providers)
+        ? providers.find((provider) => provider.name === currentProviderName)
+        : null;
+      if (provider?.baseUrl && provider?.apiKey) {
+        // 使用解构赋值和可选链操作符
+        access.useCustomProvider = true;
+        access.customProvider_apiKey = provider.apiKey;
+        access.customProvider_baseUrl = provider.baseUrl;
+        access.customProvider_type = provider.type;
+      } else {
+        access.useCustomProvider = false;
       }
     } catch (error) {
-      console.error("Error parsing stored providers:", error);
+      console.error("Error processing custom providers:", error);
+      access.useCustomProvider = false;
     }
-  }
-  if (current_baseUrl && current_apiKey) {
-    access.useCustomProvider = true;
-    access.customProvider_apiKey = current_apiKey;
-    access.customProvider_baseUrl = current_baseUrl;
-    access.customProvider_type = current_type;
-  } else {
-    access.useCustomProvider = false;
-  }
-  const canUploadImage = isVisionModel(currentModel);
+  }, [
+    models,
+    session.mask.modelConfig.model,
+    session.messages,
+    currentModel,
+    currentProviderName,
+  ]);
+  const canUploadImage =
+    isVisionModel(currentModel) || !!currentModelInfo?.enableVision;
 
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showUploadImage, setShowUploadImage] = useState(false);
@@ -1156,7 +1203,7 @@ export function ChatActions(props: {
         <ChatAction
           onClick={() => setShowModelSelector(true)}
           alwaysShowText={true}
-          text={currentModelDisplayName || currentModel}
+          text={currentModelInfo?.displayName || currentModel}
           icon={<RobotIcon />}
         />
 
@@ -1187,15 +1234,11 @@ export function ChatActions(props: {
             }}
           />
         )}
-        {isMobileScreen && (
+        {isMobileScreen && !showMobileActions && (
           <ChatAction
             onClick={toggleMobileActions}
-            text={
-              showMobileActions
-                ? Locale.Chat.InputActions.Collapse
-                : Locale.Chat.InputActions.Expand
-            }
-            icon={showMobileActions ? <CollapseIcon /> : <ExpandIcon />}
+            text={Locale.Chat.InputActions.Expand}
+            icon={<ExpandIcon />}
           />
         )}
       </div>
@@ -1239,18 +1282,18 @@ export function ChatActions(props: {
           alwaysShowText={isTranslating || originalTextForTranslate !== null}
           icon={<TranslateIcon />}
         />
-        {!isMobileScreen && (
-          <ChatAction
-            onClick={handleOCR}
-            text={
-              isOCRing
-                ? Locale.Chat.InputActions.OCR.isDetectingToast
-                : Locale.Chat.InputActions.OCR.Title
-            }
-            alwaysShowText={isOCRing}
-            icon={<OcrIcon />}
-          />
-        )}
+        {/* {!isMobileScreen && ( */}
+        <ChatAction
+          onClick={handleOCR}
+          text={
+            isOCRing
+              ? Locale.Chat.InputActions.OCR.isDetectingToast
+              : Locale.Chat.InputActions.OCR.Title
+          }
+          alwaysShowText={isOCRing}
+          icon={<OcrIcon />}
+        />
+        {/* )} */}
         <ChatAction
           onClick={handlePrivacy}
           text={
@@ -1263,6 +1306,14 @@ export function ChatActions(props: {
           alwaysShowText={isPrivacying || originalTextForPrivacy !== null}
           icon={<PrivacyIcon />}
         />
+        {isMobileScreen && showMobileActions && (
+          <ChatAction
+            onClick={toggleMobileActions}
+            alwaysShowText={true}
+            text={Locale.Chat.InputActions.Collapse}
+            icon={<CollapseIcon />}
+          />
+        )}
       </div>
     </div>
   );
@@ -2250,7 +2301,15 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const currentModel = chatStore.currentSession().mask.modelConfig.model;
-      const canUploadImage = isVisionModel(currentModel);
+      const currentProviderName =
+        chatStore.currentSession().mask.modelConfig.providerName;
+      const currentModelInfo = modelTable.find(
+        (m) =>
+          m.name === currentModel &&
+          m.provider?.providerName === currentProviderName,
+      );
+      const canUploadImage =
+        isVisionModel(currentModel) || !!currentModelInfo?.enableVision;
       const items = (event.clipboardData || window.clipboardData).items;
 
       // 检查是否有文本内容
@@ -2411,7 +2470,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
         }
       }
     },
-    [attachImages, attachFiles, chatStore],
+    [attachImages, attachFiles, chatStore, modelTable],
   );
 
   function supportFileType(filename: string) {
@@ -2649,7 +2708,12 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     }`;
     const { statistic } = message;
     if (!statistic) return mainInfo;
-
+    const isStreaming =
+      message.isStreamRequest !== undefined
+        ? message.isStreamRequest
+        : statistic &&
+          "firstReplyLatency" in statistic &&
+          statistic.firstReplyLatency !== undefined;
     const {
       singlePromptTokens,
       completionTokens,
@@ -2657,38 +2721,51 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       totalReplyLatency,
     } = statistic;
 
-    // 根据角色动态处理统计信息
     if (message.role === "assistant") {
-      // Assistant 需要检查所有相关字段
-      if (
-        completionTokens === undefined ||
-        !firstReplyLatency ||
-        !totalReplyLatency
-      ) {
-        return mainInfo;
+      if (isStreaming) {
+        // For streaming, check all relevant fields
+        if (
+          completionTokens === undefined ||
+          !firstReplyLatency ||
+          !totalReplyLatency
+        ) {
+          return mainInfo;
+        }
+      } else {
+        // For non-streaming, only check completionTokens and totalReplyLatency
+        if (completionTokens === undefined || !totalReplyLatency) {
+          return mainInfo;
+        }
       }
     } else {
-      // 其他角色只需要检查 prompt tokens
+      // Other roles only need to check prompt tokens
       if (singlePromptTokens === undefined) return mainInfo;
     }
 
-    // 动态生成统计信息
     const tokenString =
       message.role === "assistant"
         ? `${completionTokens} Tokens`
         : `${singlePromptTokens} Tokens`;
 
-    // 仅 assistant 显示性能指标
     const performanceInfo =
       message.role === "assistant"
         ? (() => {
-            const ttft = (firstReplyLatency! / 1000).toFixed(2);
-            const latency = (totalReplyLatency! / 1000).toFixed(2);
-            const speed = (
-              (1000 * completionTokens!) /
-              (totalReplyLatency! - firstReplyLatency!)
-            ).toFixed(2);
-            return `⚡ ${speed} T/s ⏱️ FT:${ttft}s | TT:${latency}s`;
+            if (isStreaming) {
+              const ttft = (firstReplyLatency! / 1000).toFixed(2);
+              const latency = (totalReplyLatency! / 1000).toFixed(2);
+              const speed = (
+                (1000 * completionTokens!) /
+                (totalReplyLatency! - firstReplyLatency!)
+              ).toFixed(2);
+              return `⚡ ${speed} T/s ⏱️ FT:${ttft}s | TT:${latency}s`;
+            } else {
+              const speed = (
+                (1000 * completionTokens!) /
+                totalReplyLatency!
+              ).toFixed(2);
+              const latency = (totalReplyLatency! / 1000).toFixed(2);
+              return `⚡ ${speed} T/s ⏱️ ${latency}s (Non-stream)`;
+            }
           })()
         : "";
 
@@ -2706,6 +2783,11 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       `${mainInfo} - ${statInfo}`
     );
   };
+
+  const enableParamOverride =
+    session.mask.modelConfig.enableParamOverride || false;
+  const paramOverrideContent =
+    session.mask.modelConfig.paramOverrideContent || "";
   return (
     <div className={styles.chat} key={session.id}>
       <div className="window-header" data-tauri-drag-region>
@@ -3178,9 +3260,21 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
             attachImages.length != 0 || attachFiles.length != 0
               ? styles["chat-input-panel-inner-attach"]
               : ""
-          }`}
+          } ${enableParamOverride ? styles["with-param-override"] : ""}`}
           htmlFor="chat-input"
         >
+          {enableParamOverride && (
+            <div className={styles["param-override-header"]}>
+              <div className={styles["param-override-indicator"]}>
+                <span className={styles["param-override-icon"]}>⚙️</span>
+                <span>{Locale.Settings.ParameterOverride.EnableInfo}</span>
+              </div>
+              <div className={styles["param-override-tooltip"]}>
+                {paramOverrideContent ||
+                  Locale.Settings.ParameterOverride.EmptyParam}
+              </div>
+            </div>
+          )}
           <textarea
             id="chat-input"
             ref={inputRef}

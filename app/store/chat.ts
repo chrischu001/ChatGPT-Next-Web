@@ -44,6 +44,7 @@ export type ChatMessage = RequestMessage & {
   providerName?: string;
   beClear?: boolean;
   isContinuePrompt?: boolean;
+  isStreamRequest?: boolean;
 
   statistic?: {
     singlePromptTokens?: number;
@@ -601,6 +602,7 @@ export const useChatStore = createPersistStore(
                 if (!botMessage.statistic) {
                   botMessage.statistic = {};
                 }
+                botMessage.isStreamRequest = !!message?.is_stream_request;
                 botMessage.statistic.completionTokens =
                   message?.usage?.completion_tokens;
                 botMessage.statistic.firstReplyLatency =
@@ -802,22 +804,43 @@ export const useChatStore = createPersistStore(
         refreshTitle: boolean = false,
         targetSession: ChatSession,
       ) {
+        const access = useAccessStore.getState();
         const config = useAppConfig.getState();
         const session = targetSession;
 
-        const compressModel = getCompressModel();
-        const [compressModelName, compressProviderName] =
-          compressModel.split(/@(?=[^@]*$)/);
-        if (compressModelName) {
-          session.mask.modelConfig.compressModel = compressModelName;
-          if (compressProviderName) {
-            session.mask.modelConfig.translateProviderName =
-              compressProviderName as ServiceProvider;
-          }
-        }
         const modelConfig = session.mask.modelConfig;
+        let compressModel = modelConfig.compressModel;
+        let providerName = modelConfig.compressProviderName;
+        if (!providerName && access.compressModel) {
+          let providerNameStr;
+          [compressModel, providerNameStr] = access.compressModel.split("@");
+          providerName = providerNameStr as ServiceProvider;
+        }
 
-        const providerName = modelConfig.compressProviderName;
+        try {
+          const storedProvidersData = safeLocalStorage().getItem(
+            StoreKey.CustomProvider,
+          );
+          const providers = storedProvidersData
+            ? JSON.parse(storedProvidersData)
+            : [];
+
+          const provider = Array.isArray(providers)
+            ? providers.find((provider) => provider.name === providerName)
+            : null;
+          if (provider?.baseUrl && provider?.apiKey) {
+            // 使用解构赋值和可选链操作符
+            access.useCustomProvider = true;
+            access.customProvider_apiKey = provider.apiKey;
+            access.customProvider_baseUrl = provider.baseUrl;
+            access.customProvider_type = provider.type;
+          } else {
+            access.useCustomProvider = false;
+          }
+        } catch (error) {
+          console.error("Error processing custom providers:", error);
+          access.useCustomProvider = false;
+        }
         const api: ClientApi = getClientApi(providerName);
 
         // remove error messages if any
@@ -865,7 +888,7 @@ export const useChatStore = createPersistStore(
           api.llm.chat({
             messages: topicMessages,
             config: {
-              model: modelConfig.compressModel,
+              model: compressModel,
               stream: false,
             },
             type: "topic",

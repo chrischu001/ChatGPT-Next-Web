@@ -29,17 +29,8 @@ import {
 import { prettyObject } from "@/app/utils/format";
 import { getClientConfig } from "@/app/config/client";
 import { makeAzurePath } from "@/app/azure";
-import {
-  getMessageTextContent,
-  getMessageTextContentWithoutThinking,
-  isVisionModel,
-  isThinkingModel,
-  wrapThinkingPart,
-} from "@/app/utils";
-import {
-  preProcessImageContent,
-  preProcessMultimodalContent,
-} from "@/app/utils/chat";
+import { isVisionModel, isThinkingModel, wrapThinkingPart } from "@/app/utils";
+import { preProcessMultimodalContent } from "@/app/utils/chat";
 import { estimateTokenLengthInLLM } from "@/app/utils/token";
 
 export interface OpenAIListModelResponse {
@@ -64,6 +55,7 @@ interface RequestPayload {
   top_p?: number;
   max_tokens?: number;
   max_completion_tokens?: number;
+  reasoning_effort?: string;
   stream_options?: {
     include_usage?: boolean;
   };
@@ -120,7 +112,35 @@ export class ChatGPTApi implements LLMApi {
     if (res.error) {
       return "```\n" + JSON.stringify(res, null, 4) + "\n```";
     }
-    return res.choices?.at(0)?.message?.content ?? res;
+    let richMessage: RichMessage = {
+      content: "",
+      reasoning_content: "",
+    };
+    richMessage.reasoning_content =
+      res.choices?.at(0)?.message?.reasoning_content ||
+      res.choices?.at(0)?.message?.reasoning;
+    const content = res.choices?.at(0)?.message?.content;
+    if (richMessage.reasoning_content) {
+      richMessage.content =
+        "<think>\n" +
+        richMessage.reasoning_content +
+        "\n</think>\n\n" +
+        content;
+    } else {
+      richMessage.content = content ?? res;
+    }
+    let prompt_tokens = res.usage?.prompt_tokens;
+    let completion_tokens = res.usage?.completion_tokens;
+    let total_tokens = res.usage?.total_tokens;
+    richMessage.usage = {
+      prompt_tokens: prompt_tokens,
+      completion_tokens:
+        prompt_tokens !== undefined && total_tokens !== undefined
+          ? total_tokens - prompt_tokens
+          : completion_tokens,
+      total_tokens: total_tokens,
+    };
+    return richMessage ?? res;
   }
 
   async speech(options: SpeechOptions): Promise<ArrayBuffer> {
@@ -177,6 +197,8 @@ export class ChatGPTApi implements LLMApi {
     const isDeepseekReasoner =
       model_name.includes("deepseek-reasoner") ||
       model_name.includes("deepseek-r1");
+    const isGrok = model_name.startsWith("grok-");
+    const isGrokThink = model_name.startsWith("grok-3-mini-");
     const thinkingModel = isThinkingModel(model_name);
 
     // const isThinking =
@@ -256,6 +278,16 @@ export class ChatGPTApi implements LLMApi {
       // temperature: !isO1 ? modelConfig.temperature : 1,
       // top_p: !isO1 ? modelConfig.top_p : 1,
     };
+    // reasoning_effort
+    if (isGrokThink) {
+      if (
+        modelConfig.reasoning_effort === "low" ||
+        modelConfig.reasoning_effort === "high"
+      ) {
+        requestPayload["reasoning_effort"] = modelConfig.reasoning_effort;
+      }
+    }
+    // stream usage
     if (
       modelConfig.enableStreamUsageOptions &&
       options.config.stream &&
@@ -279,7 +311,11 @@ export class ChatGPTApi implements LLMApi {
       options?.type !== "compress" &&
       options?.type !== "topic"
     ) {
-      requestPayload["max_tokens"] = modelConfig.max_tokens;
+      if (isGrok) {
+        requestPayload["max_completion_tokens"] = modelConfig.max_tokens;
+      } else {
+        requestPayload["max_tokens"] = modelConfig.max_tokens;
+      }
     }
 
     if (!isMistral && !isDeepseekReasoner) {
@@ -302,9 +338,28 @@ export class ChatGPTApi implements LLMApi {
       }
     }
 
+    // 进行参数覆盖
+    // console.log("[parameter]", modelConfig.enableParamOverride, modelConfig.paramOverrideContent);
+    // {"stream_options":null, "temperature":0.1}
+    if (modelConfig.enableParamOverride && modelConfig.paramOverrideContent) {
+      let overrideObj = {};
+      try {
+        // 如果 paramOverrideContent 已经是对象，可以直接赋值
+        overrideObj =
+          typeof modelConfig.paramOverrideContent === "string"
+            ? JSON.parse(modelConfig.paramOverrideContent)
+            : modelConfig.paramOverrideContent;
+      } catch (e) {
+        console.error("paramOverrideContent parse error:", e);
+      }
+      if (overrideObj && typeof overrideObj === "object") {
+        Object.assign(requestPayload, overrideObj);
+      }
+    }
+
     console.log("[Request] openai payload: ", requestPayload);
 
-    const shouldStream = !!options.config.stream; // && !isO1; // o1 已经开始支持流式
+    const shouldStream = !!requestPayload["stream"]; // && !isO1; // o1 已经开始支持流式
     const controller = new AbortController();
     options.onController?.(controller);
 
@@ -392,6 +447,7 @@ export class ChatGPTApi implements LLMApi {
               completionTokens = estimateTokenLengthInLLM(full_reply);
             }
             richMessage.content = full_reply;
+            richMessage.is_stream_request = true;
             richMessage.usage = {
               completion_tokens: completionTokens,
               first_content_latency: firstReplyLatency,
@@ -471,7 +527,10 @@ export class ChatGPTApi implements LLMApi {
               const content = choices[0]?.delta?.content;
               const textmoderation = json?.prompt_filter_results;
               completionTokens =
-                json?.usage?.completion_tokens || completionTokens;
+                json?.usage?.total_tokens != null &&
+                json?.usage?.prompt_tokens != null
+                  ? json.usage.total_tokens - json.usage.prompt_tokens
+                  : json?.usage?.completion_tokens ?? completionTokens;
 
               if (firstReplyLatency == 0) {
                 firstReplyLatency = Date.now() - startRequestTime;
@@ -627,11 +686,22 @@ export class ChatGPTApi implements LLMApi {
           openWhenHidden: true,
         });
       } else {
+        let startRequestTime = Date.now();
         const res = await fetch(chatPath, chatPayload);
         clearTimeout(requestTimeoutId);
 
         const resJson = await res.json();
         const message = await this.extractMessage(resJson);
+        let finishRequestTime = Date.now();
+        if (
+          message &&
+          typeof message === "object" &&
+          "usage" in message &&
+          message.usage
+        ) {
+          message.usage.total_latency = finishRequestTime - startRequestTime;
+          message.is_stream_request = false;
+        }
         options.onFinish(message, res);
       }
     } catch (e) {

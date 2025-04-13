@@ -1,9 +1,9 @@
 // ===== 1. 通用容器和布局 =====
 .container {
   width: 100%;
-  background-color: #ffffff;
+  background-color: var(--white);
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--card-shadow, 0 1px 3px rgba(0, 0, 0, 0.1));
   overflow: hidden;
 }
 
@@ -34,7 +34,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-in-light);
 
   .headerLeft {
     display: flex;
@@ -45,13 +45,12 @@
   h1 {
     font-size: 18px;
     font-weight: 600;
-    color: #111827;
+    color: var(--black);
     margin: 0;
   }
 
   .providerCount {
     font-size: 14px;
-    color: #6b7280;
     margin-top: 4px;
   }
 }
@@ -84,7 +83,7 @@
     left: 40px;
     right: 40px;
     height: 2px;
-    background-color: #e5e7eb;
+    background-color: var(--border-color);
     z-index: 0;
     transform: translateY(-50%);
   }
@@ -101,7 +100,7 @@
   &.active {
     .stepNumber {
       background-color: var(--primary);
-      color: white;
+      color: var(--white);
       border-color: var(--primary);
     }
     
@@ -124,16 +123,14 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background-color: white;
   font-size: 14px;
   font-weight: 500;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--black);
   transition: all 0.3s ease;
 }
 
 .stepText {
   font-size: 14px;
-  color: #6b7280;
   transition: all 0.3s ease;
 }
 
@@ -144,6 +141,7 @@
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   justify-content: center;
+  align-items: center;
   position: relative;
 
   .searchInput {
@@ -164,25 +162,85 @@
     }
   }
   
-  .searchIcon {
-    position: absolute;
-    left: 40px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #9ca3af;
+  .searchIcon, .clearButton {
+    position: static;
+    transform: none;
   }
-  
-  .clearButton {
-    position: absolute;
-    right: 40px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.2s;
+  .searchInput {
+    width: 100%;
+    padding: 10px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
     
-    &:hover {
-      opacity: 1;
+    &::placeholder {
+      color: #6b7280;
+    }
+    
+    &:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+    }
+  }
+}
+// 为移动设备添加响应式样式
+@media screen and (max-width: 768px) {
+  .searchContainer {
+    flex-direction: column;
+    gap: 8px;
+  
+    .searchInput {
+      margin-bottom: 8px;
+    }
+  }
+}
+.provider-filter {
+  display: flex;
+  padding: 16px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap; // 允许换行
+  gap: 8px;
+
+  .search-bar {
+    flex-grow: 1;
+    min-width: 200px;
+    padding: 10px 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    max-width: unset;
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+
+    button {
+      flex-shrink: 0;
+    }
+  }
+
+  @media screen and (max-width: 600px) {
+    flex-direction: column;
+    align-items: stretch;
+
+    .search-bar {
+      width: 100%;
+      margin-right: 0;
+    }
+
+    .actions {
+      width: 100%;
+      margin-top: 8px;
+      justify-content: space-between;
+
+      button {
+        flex: 1;
+      }
     }
   }
 }
@@ -257,6 +315,8 @@
 // ===== 4. 提供商列表展示 =====
 .providerList {
   padding: 0 24px;
+  max-height: calc(100vh - 300px); // 设置最大高度，根据实际页面布局调整
+  overflow-y: auto; // 添加垂直滚动
 
   .providerItem {
     display: flex;
@@ -292,17 +352,6 @@
       .providerName {
         font-weight: 600;
         font-size: 16px;
-        color: #111827;
-      }
-
-      .providerDetails {
-        font-size: 14px;
-        color: #6b7280;
-        margin-top: 4px;
-        max-width: 360px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
       
       .providerMeta {
@@ -394,13 +443,59 @@
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background-color: white;
+    background-color: var(--white);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: 0.3s;
   }
   
   &.active .toggleSlider {
     transform: translateX(20px);
+  }
+}
+
+// 切换开关容器
+.toggleContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+// 切换开关标签
+.toggleLabel {
+  font-size: 14px;
+  color: var(--black);
+}
+// 如果需要，可以添加描述输入框的特殊样式
+.descriptionInput {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 400px;
+  
+  &:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  }
+}
+// 视觉支持行样式 - 使标签和开关在同一行
+.visionSupportRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  
+  label {
+    margin-right: 12px;
+    min-width: auto; // 防止标签占用过多空间
+    margin-bottom: 0; // 移除底部边距
+  }
+  
+  .toggleContainer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 }
 // 操作区中的开关容器样式调整
@@ -495,7 +590,7 @@
     
     &.active {
       background-color: var(--primary);
-      color: white;
+      color: var(--white);
       font-weight: 500;
     }
     
@@ -516,13 +611,13 @@
       font-weight: 500;
       
       .active & {
-        background-color: white;
+        background-color: var(--white);
         color: var(--primary);
       }
       
       .disabled & {
         background-color: var(--secondary);
-        color: white;
+        color: var(--white);
       }
     }
   }
@@ -571,6 +666,8 @@
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
+  height: 100px;
+  box-sizing: border-box;
   
   &:hover {
     border-color: #2563eb;
@@ -580,27 +677,22 @@
   
   &.selected {
     border-color: #2563eb;
-    background-color: rgba(37, 99, 235, 0.05);
+    background-color: rgba(37, 99, 235, 0.3);
   }
-  
-  // .modelName {
-  //   font-weight: 500;
-  //   font-size: 14px;
-  //   color: #111827;
-  // }
 }
 
 .modelName {
   font-weight: 500;
   font-size: 14px;
-  margin-bottom: 4px;
-  color: #111827;
+  margin-bottom: 8px;
+  // color: var(--white);
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
   display: -webkit-box;
   -webkit-line-clamp: 2; // Limit to 2 lines
   -webkit-box-orient: vertical;
+  word-break: break-all; // Allow word wrapping
   min-height: 36px; // Add minimum height for two lines
 }
 
@@ -769,7 +861,7 @@
   font-weight: 500;
   font-size: 14px;
   margin-bottom: 4px;
-  color: #111827;
+  color: var(--black);
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
@@ -795,32 +887,9 @@
     color: #2563eb;
   }
 }
-// 编辑按钮样式 - 类似测试按钮
-.modelEditButton {
-  flex-shrink: 0;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 1px 1px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background-color: #f3f4f6;
-  color: #6b7280;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 40px;
-  text-align: center;
-  
-  &:hover {
-    background-color: #e5e7eb;
-    border-color: #9ca3af;
-    color: #4b5563;
-  }
-}
 
 // 模型测试图标
-.modelTestIcon {
+.modelTestIcon, .visionToggle, .modelEditButton, .placeholderItem {
   flex-shrink: 0;
   font-size: 12px;
   cursor: pointer;
@@ -884,7 +953,7 @@
 
 // 添加编辑名称模态框样式
 .editNameModal {
-  background-color: white;
+  background-color: var(--white);
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 10px 15px rgba(0, 0, 0, 0.1);
   width: 500px;
@@ -924,12 +993,12 @@
     font-size: 14px;
     font-weight: 500;
     margin-bottom: 6px;
-    color: #374151;
+    color: var(--black);
   }
   
   .modelIdText {
     font-size: 14px;
-    color: #6b7280;
+    color: var(--black);
     padding: 8px 0;
     word-break: break-all;
   }
@@ -967,7 +1036,7 @@
   .cancelButton {
     background: none;
     border: 1px solid #e5e7eb;
-    color: #4b5563;
+    color: var(--black);
     
     &:hover {
       background-color: #f3f4f6;
@@ -976,7 +1045,7 @@
   
   .saveButton {
     background-color: var(--primary, #2563eb);
-    color: white;
+    color: var(--white);
     border: none;
     
     &:hover {
@@ -993,9 +1062,11 @@
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+  width: 100%;
   
   .keyInput {
     flex: 1;
+    min-width: 400px;
     padding: 8px 12px;
     border: 1px solid #e5e7eb;
     border-radius: 6px;
@@ -1032,15 +1103,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background-color: white;
-  border: 1px solid #e5e7eb;
+  background-color: var(--second);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   transition: all 0.2s;
   
-  &:hover {
-    border-color: #d1d5db;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  }
+  // &:hover {
+  //   border-color: #d1d5db;
+  //   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  // }
   
   .keyContent {
     display: flex;
@@ -1050,7 +1121,6 @@
     .keyText {
       font-family: monospace;
       font-size: 14px;
-      color: #111827;
       word-break: break-all;
     }
   }
@@ -1121,3 +1191,4 @@
     flex-direction: column;
   }
 }
+

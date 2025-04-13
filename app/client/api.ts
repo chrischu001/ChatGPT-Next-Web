@@ -64,6 +64,7 @@ export interface SpeechOptions {
 export interface RichMessage {
   content: string;
   reasoning_content: string;
+  is_stream_request?: boolean;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -77,7 +78,7 @@ export interface RichMessage {
 export interface ChatOptions {
   messages: RequestMessage[];
   config: LLMConfig;
-  type?: "chat" | "topic" | "compress";
+  type?: "chat" | "topic" | "compress" | "translate" | "ocr";
 
   onUpdate?: (message: string, chunk: string) => void;
   onFinish: (message: string | RichMessage, responseRes: Response) => void;
@@ -124,6 +125,7 @@ export interface Model {
   description?: string;
   provider?: LLMModelProvider;
   isDefault?: boolean;
+  enableVision?: boolean;
 }
 
 interface ChatProvider {
@@ -235,7 +237,6 @@ export function getHeaders(ignoreHeaders: boolean = false) {
       Accept: "application/json",
     };
   }
-
   const modelConfig = chatStore.currentSession().mask.modelConfig;
   const isGoogle = modelConfig.providerName === ServiceProvider.Google;
   const isAzure = accessStore.provider === ServiceProvider.Azure;

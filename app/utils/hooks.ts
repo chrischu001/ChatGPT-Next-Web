@@ -11,7 +11,14 @@ export function useAllModels() {
   const models = useMemo(() => {
     return collectModelsWithDefaultModel(
       configStore.models,
-      [configStore.customModels, accessStore.customModels].join(","),
+      [
+        configStore.customModels,
+        accessStore.customModels,
+        accessStore.defaultModel,
+        accessStore.compressModel,
+        accessStore.translateModel,
+        accessStore.ocrModel,
+      ].join(","),
       accessStore,
     );
   }, [
@@ -21,7 +28,6 @@ export function useAllModels() {
     configStore.models,
     accessStore,
   ]);
-
   return models;
 }
 
@@ -50,10 +56,10 @@ export function useAllModelsWithCustomProviders() {
                 id: model.name,
                 providerName: provider.name,
                 providerType: "custom-provider",
-                // baseUrl: provider.baseUrl,
-                // apiKey: provider.apiKey,
               },
               isCustom: true as const,
+              enableVision: model?.enableVision,
+              description: model?.description,
             }));
         });
       } catch (e) {
