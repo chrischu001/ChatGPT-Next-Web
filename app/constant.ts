@@ -189,6 +189,7 @@ export const DEFAULT_TTS_VOICES = [
 export const VISION_MODEL_REGEXES = [
   /vision/,
   /gpt-4o/,
+  /gpt-4.1/,
   /claude-3/,
   /gemini-1\.5/,
   /gemini-exp/,
@@ -204,6 +205,7 @@ export const VISION_MODEL_REGEXES = [
   /pixtral/,
   /kimi-latest/,
   /multimodal/,
+  /llama-4/,
 ];
 
 export const EXCLUDE_VISION_MODEL_REGEXES = [/claude-3-5-haiku-20241022/];
@@ -402,8 +404,16 @@ export const textFileExtensions = [
   "adoc",
   "srt",
   "vtt",
+  "docx",
+  "doc",
+  "pptx",
+  "ppt",
+  "pdf",
+  "xlsx",
+  "xls",
+  "zip",
 ];
 
 export const MAX_DOC_CNT = 6; // 一次性支持上传的文件数量
-export const maxFileSizeInKB = 1024 * 1; // 1 MB
+export const maxFileSizeInKB = 1024 * 5; // 1 MB
 export const minTokensForPastingAsFile = 4096; // 超过4k个token的文本粘贴为附件文件

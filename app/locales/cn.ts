@@ -220,6 +220,10 @@ const cn = {
       SubTitle:
         "是否在消息中使用别名(DisplayName)，如模型未定义别名则使用原来的名称",
     },
+    ShareSessionTitle: {
+      Title: "对话主题",
+      SubTitle: "支持设置对话主题覆盖原有标题",
+    },
     Steps: {
       Select: "选取",
       Preview: "预览",
@@ -596,6 +600,7 @@ const cn = {
       EnableInfo: "已添加覆盖参数",
       EmptyParam: "覆盖参数内容为空",
     },
+    DocumentUploadWarning: "⚠️当前对话模型不支持图片理解或未配置视觉支持",
     TTS: {
       Enable: {
         Title: "启用文本转语音",
@@ -728,7 +733,7 @@ const cn = {
     ConfirmNoShow: "确认禁用？禁用后可以随时在设置中重新启用。",
     Title: "挑选一个面具",
     SubTitle: "现在开始，与面具背后的灵魂思维碰撞",
-    More: "查看全部",
+    More: "展开代码",
     Less: "折叠代码",
     Searching: "搜索中...",
     Search: "搜索内容",

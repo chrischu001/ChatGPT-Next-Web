@@ -232,6 +232,10 @@ const en: LocaleType = {
       SubTitle:
         "Use DisplayName in exported messages, if the model does not define an alias, the original name will be used",
     },
+    ShareSessionTitle: {
+      Title: "Session Title",
+      SubTitle: "Support to Set Session Title to override original title",
+    },
     Steps: {
       Select: "Select",
       Preview: "Preview",
@@ -622,6 +626,8 @@ const en: LocaleType = {
       EnableInfo: "Parameter Override Enabled",
       EmptyParam: "No parameters specified",
     },
+    DocumentUploadWarning:
+      "⚠️The current Chat model does not support upload image or visual support is not configured.",
     TTS: {
       Enable: {
         Title: "Enable TTS",

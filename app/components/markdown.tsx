@@ -25,7 +25,6 @@ import { useAppConfig } from "../store/config";
 
 import { Collapse } from "antd";
 import styled from "styled-components";
-const { Panel } = Collapse;
 
 interface SearchCollapseProps {
   title?: string | React.ReactNode;
@@ -70,11 +69,14 @@ const SearchCollapse = styled(
           activeKey={activeKeys}
           onChange={(keys) => setActiveKeys(keys as string[])}
           bordered={false}
-        >
-          <Panel header={title} key="1">
-            {children}
-          </Panel>
-        </Collapse>
+          items={[
+            {
+              key: "1",
+              label: title,
+              children: children,
+            },
+          ]}
+        ></Collapse>
       </div>
     );
   },
@@ -153,6 +155,36 @@ const ThinkCollapse = styled(
       toggleCollapse();
     };
 
+    // Recursive function to extract text from children
+    const extractText = (node: any): string => {
+      if (!node) return "";
+
+      // Direct string
+      if (typeof node === "string") return node;
+
+      // Array of nodes
+      if (Array.isArray(node)) {
+        return node.map(extractText).join("");
+      }
+
+      // React element
+      if (node.props && node.props.children) {
+        return extractText(node.props.children);
+      }
+
+      return "";
+    };
+
+    const handleCopyContent = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      try {
+        const text = extractText(children);
+        copyToClipboard(`<think>${text}</think>`);
+      } catch (err) {
+        console.error("Failed to copy thinking content:", err);
+      }
+    };
+
     return (
       <div
         onContextMenu={handleRightClick}
@@ -165,11 +197,27 @@ const ThinkCollapse = styled(
           activeKey={activeKeys}
           onChange={(keys) => !disabled && setActiveKeys(keys as string[])}
           bordered={false}
-        >
-          <Panel header={title} key="1">
-            {children}
-          </Panel>
-        </Collapse>
+          items={[
+            {
+              key: "1",
+              label: (
+                <div className="think-collapse-header">
+                  <span>{title}</span>
+                  {!disabled && (
+                    <span
+                      className="copy-think-button"
+                      onClick={handleCopyContent}
+                      title={Locale.Chat.Actions.Copy}
+                    >
+                      📋
+                    </span>
+                  )}
+                </div>
+              ),
+              children: children,
+            },
+          ]}
+        ></Collapse>
       </div>
     );
   },
@@ -193,7 +241,22 @@ const ThinkCollapse = styled(
       color: var(--primary) !important;
     }
   }
+  .think-collapse-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+  .copy-think-button {
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0.6;
+    transition: opacity 0.3s ease;
 
+    &:hover {
+      opacity: 1;
+    }
+  }
   .ant-collapse-content {
     background-color: transparent !important;
     border-top: 1px solid var(--border-in-light) !important;
@@ -381,7 +444,7 @@ export function PreCode(props: { children: any }) {
   }, [renderArtifacts]);
   return (
     <>
-      <pre ref={ref}>
+      <pre ref={ref} style={{ position: "relative" }}>
         <span
           className="copy-code-button"
           onClick={() => {
@@ -448,12 +511,20 @@ function CustomCode(props: { children: any; className?: string }) {
     setCollapsed((collapsed) => !collapsed);
   };
   const renderShowMoreButton = () => {
-    if (showToggle && enableCodeFold && collapsed) {
+    if (showToggle && enableCodeFold) {
       return (
         <div
           className={`show-hide-button ${collapsed ? "collapsed" : "expanded"}`}
+          style={{
+            position: "absolute",
+            right: "12px",
+            bottom: "12px",
+            zIndex: 1,
+          }}
         >
-          <button onClick={toggleCollapsed}>{Locale.NewChat.More}</button>
+          <button onClick={toggleCollapsed} className="code-fold-btn">
+            {collapsed ? Locale.NewChat.More : Locale.NewChat.Less}
+          </button>
         </div>
       );
     }
@@ -467,7 +538,7 @@ function CustomCode(props: { children: any; className?: string }) {
         ref={ref}
         style={{
           maxHeight: enableCodeFold && collapsed ? "400px" : "none",
-          overflowY: "hidden",
+          overflowY: enableCodeFold && collapsed ? "auto" : "visible",
         }}
       >
         {props.children}

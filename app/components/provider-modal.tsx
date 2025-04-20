@@ -21,14 +21,38 @@ import SearchIcon from "../icons/zoom.svg";
 import VisionIcon from "../icons/eye.svg";
 import VisionOffIcon from "../icons/eye-off.svg";
 import TrashIcon from "../icons/delete.svg";
+import { useMobileScreen } from "../utils";
 
+// 测试结果结构
+type TestResultType = {
+  success: boolean;
+  message: string;
+  fullError?: string;
+  time?: number; // Include time as optional
+};
+// 获取提供商类型标签
+export const providerTypeLabels: Record<string, string> = {
+  openai: "OpenAI",
+  siliconflow: "SiliconFlow",
+  deepseek: "DeepSeek",
+  openrouter: "OpenRouter",
+  // azure: 'Azure OpenAI',
+  // anthropic: 'Anthropic',
+  // custom: '自定义API',
+};
 // 获取提供商默认的地址
-const providerTypeDefaultUrls: Record<string, string> = {
+export const providerTypeDefaultUrls: Record<string, string> = {
   openai: "https://api.openai.com",
   siliconflow: "https://api.siliconflow.cn",
   deepseek: "https://api.deepseek.com",
+  openrouter: "https://openrouter.ai/api",
 };
-
+export const providerTypeDefaultTestModel: Record<string, string> = {
+  openai: "gpt-4.1",
+  siliconflow: "Qwen/Qwen2.5-7B-Instruct",
+  deepseek: "deepseek-chat",
+  openrouter: "qwen/qwen-2.5-7b-instruct:free",
+};
 // KeyItem 组件
 const KeyItem = ({
   onDelete,
@@ -38,6 +62,9 @@ const KeyItem = ({
   type,
   externalBalance,
   externalLoading,
+  testResult,
+  isTesting,
+  onTest,
 }: {
   onDelete: (index: number) => void;
   index: number;
@@ -46,6 +73,14 @@ const KeyItem = ({
   type: string;
   externalBalance?: string | null;
   externalLoading?: boolean;
+  testResult?: {
+    success: boolean;
+    message: string;
+    fullError?: string;
+    time?: number;
+  };
+  isTesting?: boolean;
+  onTest?: () => void;
 }) => {
   const accessStore = useAccessStore.getState();
   const [loading, setLoading] = useState(false);
@@ -59,10 +94,16 @@ const KeyItem = ({
   }, [externalBalance]);
 
   const checkBalance = async () => {
+    if (baseUrl.endsWith("#")) {
+      showToast("当前渠道不支持余额查询");
+      return;
+    }
     setLoading(true);
     try {
       let result = null;
-      if (type === "siliconflow") {
+      if (type === "openrouter") {
+        result = await accessStore.checkOpenRouterBalance(apiKey, baseUrl);
+      } else if (type === "siliconflow") {
         result = await accessStore.checkSiliconFlowBalance(apiKey, baseUrl);
       } else if (type === "deepseek") {
         result = await accessStore.checkDeepSeekBalance(apiKey, baseUrl);
@@ -74,7 +115,12 @@ const KeyItem = ({
       }
       // 处理 result
       if (result && result.isValid && result.totalBalance) {
-        setBalance(`${result.currency} ${result.totalBalance}`);
+        try {
+          const formattedBalance = Number(result.totalBalance).toFixed(2);
+          setBalance(`${result.currency} ${formattedBalance}`);
+        } catch (e) {
+          showToast("余额格式化失败");
+        }
       } else {
         showToast(result?.error || "查询失败或不支持查询");
       }
@@ -90,6 +136,16 @@ const KeyItem = ({
     <div className={styles.keyItem}>
       <div className={styles.keyContent}>
         <div className={styles.keyText}>{apiKey}</div>
+        {testResult && (
+          <div
+            className={`${styles.testResult} ${
+              testResult.success ? styles.testSuccess : styles.testError
+            }`}
+            title={testResult.fullError || ""}
+          >
+            {testResult.message}
+          </div>
+        )}
       </div>
       <div className={styles.keyActions}>
         {balance && <div className={styles.balanceDisplay}>{balance}</div>}
@@ -108,9 +164,27 @@ const KeyItem = ({
           </div>
         ) : null}
 
-        <div className={styles.keyDeleteIcon} onClick={() => onDelete(index)}>
-          <TrashIcon />
-        </div>
+        {/* Add test button */}
+        {onTest &&
+          (isTesting ? (
+            <div style={{ width: "20px", height: "20px" }}>
+              <LoadingIcon />
+            </div>
+          ) : (
+            <IconButton
+              text="Test"
+              bordered
+              onClick={onTest}
+              title="测试API密钥连通性"
+            />
+          ))}
+        <IconButton
+          icon={<TrashIcon />}
+          text="Delete"
+          bordered
+          onClick={() => onDelete(index)}
+          title="删除密钥"
+        />
       </div>
     </div>
   );
@@ -139,6 +213,7 @@ export function ProviderModal(props: ProviderModalProps) {
     status: "inactive",
   });
 
+  const isMobileScreen = useMobileScreen();
   // 模型相关状态
   const [models, setModels] = useState<Model[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(false);
@@ -638,10 +713,35 @@ export function ProviderModal(props: ProviderModalProps) {
   };
 
   // Function to remove a key from the list
-  const removeKeyFromList = (index: number) => {
-    const updatedKeys = [...keyList];
-    updatedKeys.splice(index, 1);
-    setKeyList(updatedKeys);
+  const removeKeyFromList = async (index: number) => {
+    // Get the key that will be deleted for display in the confirmation message
+    const keyToDelete = keyList[index];
+
+    // Show confirmation dialog
+    const confirmContent = (
+      <div>
+        <div>{"Are you sure you want to delete this API key?"}</div>
+        <div
+          style={{
+            marginTop: "8px",
+            padding: "6px 10px",
+            backgroundColor: "#f9fafb",
+            borderRadius: "4px",
+            fontFamily: "monospace",
+            wordBreak: "break-all",
+          }}
+        >
+          {keyToDelete}
+        </div>
+      </div>
+    );
+
+    // If user confirms, proceed with deletion
+    if (await showConfirm(confirmContent)) {
+      const updatedKeys = [...keyList];
+      updatedKeys.splice(index, 1);
+      setKeyList(updatedKeys);
+    }
   };
 
   // Function to handle key press in key input field
@@ -669,10 +769,290 @@ export function ProviderModal(props: ProviderModalProps) {
     return !isNaN(balance) && balance > 0;
   };
 
+  const [testMessage, setTestMessage] = useState(
+    "Hello. Please respond with 'OK'.",
+  );
+  const [testingKeys, setTestingKeys] = useState<Record<string, boolean>>({});
+  const [testResults, setTestResults] = useState<
+    Record<
+      string,
+      {
+        success: boolean;
+        message: string;
+        time?: number;
+        fullError?: string;
+      }
+    >
+  >({});
+  const [testModel, setTestModel] = useState("gpt-4o-mini");
+
+  // Add this useEffect to update the test model when formData.type changes
+  useEffect(() => {
+    // This will run when formData.type changes
+    const defaultTestModel =
+      providerTypeDefaultTestModel[formData.type] || "gpt-4o-mini";
+    setTestModel(defaultTestModel);
+  }, [formData.type]);
+
+  // Add this helper function to test a single key
+  const testKeyConnectivity = async (apiKey: string) => {
+    setTestingKeys((prev) => ({ ...prev, [apiKey]: true }));
+    setTestResults((prev) => ({
+      ...prev,
+      [apiKey]: { success: false, message: "Testing..." },
+    }));
+
+    let result = {
+      success: false,
+      message: "✗ Error",
+      fullError: "Unknown error",
+      time: -1,
+    };
+
+    try {
+      const startTime = Date.now();
+      let completionPath = "/v1/chat/completions";
+
+      const response = await fetchWithTimeout(
+        `${formData.baseUrl}${completionPath}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: testModel,
+            messages: [{ role: "user", content: testMessage }],
+            max_tokens: 20,
+            stream: false,
+          }),
+        },
+        10000, // 10 second timeout
+      );
+
+      const endTime = Date.now();
+      const responseTime = endTime - startTime;
+
+      if (response.ok) {
+        const data = await response.json();
+        result = {
+          ...result,
+          success: true,
+          message: `✓ (${responseTime}ms)`,
+          time: responseTime,
+        };
+      } else {
+        const errorData = await response.json().catch(() => ({
+          error: { message: "Unknown error", code: "unknown" },
+        }));
+
+        const fullError =
+          errorData.error?.message || `Error ${response.status}`;
+        result = {
+          ...result,
+          success: false,
+          message: "✗ Error",
+          fullError: fullError,
+        };
+      }
+    } catch (error) {
+      let errorMsg = "Request failed";
+
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          errorMsg = "Request timeout";
+        } else {
+          errorMsg = error.message;
+        }
+      }
+
+      result = {
+        ...result,
+        success: false,
+        message: "✗ Error",
+        fullError: errorMsg,
+      };
+    } finally {
+      setTestResults((prev) => ({ ...prev, [apiKey]: result }));
+      setTestingKeys((prev) => ({ ...prev, [apiKey]: false }));
+    }
+    return result;
+  };
+
+  // Function to test all keys
+  const testAllKeys = async () => {
+    for (const key of keyList) {
+      await testKeyConnectivity(key);
+    }
+    showToast("All keys tested");
+  };
+
+  const removeInvalidKeys = async () => {
+    // Add confirmation dialog
+    const confirmContent = (
+      <div style={{ lineHeight: "1.4" }}>
+        <div style={{ fontWeight: "500" }}>
+          此操作将会移除所有测试连接失败的密钥。
+        </div>
+
+        <div
+          style={{
+            margin: "8px 0",
+            padding: "8px 10px",
+            backgroundColor: "#fff7ed",
+            borderLeft: "3px solid #f97316",
+            borderRadius: "4px",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "600",
+              color: "#c2410c",
+              marginBottom: "4px",
+            }}
+          >
+            将移除以下类型的密钥:
+          </div>
+          <ul
+            style={{
+              paddingLeft: "20px",
+              margin: "4px 0 0 0",
+              color: "#9a3412",
+            }}
+          >
+            <li>API连接超时的密钥</li>
+            <li>验证失败的密钥</li>
+            <li>模型不可用的密钥</li>
+          </ul>
+        </div>
+
+        <div
+          style={{
+            marginTop: "8px",
+            fontWeight: "600",
+            color: "#dc2626",
+          }}
+        >
+          此操作执行后无法撤回，是否继续？
+        </div>
+      </div>
+    );
+
+    // If user cancels, don't proceed
+    if (!(await showConfirm(confirmContent))) {
+      return;
+    }
+
+    // Show progress indicator
+    showToast("正在检查密钥...");
+
+    // Check if we have test results for all keys
+    const untestedKeys = keyList.filter((key) => !testResults[key]);
+
+    // Create a local collection of results
+    const localResults: Record<string, TestResultType> = {};
+
+    // First, copy any existing test results
+    for (const key of keyList) {
+      if (testResults[key]) {
+        localResults[key] = { ...testResults[key] };
+      }
+    }
+
+    // If there are untested keys, test them first
+    if (untestedKeys.length > 0) {
+      showToast(`测试 ${untestedKeys.length} 个未测试的密钥...`);
+
+      const processBatch = async (keys: string[], batchSize: number) => {
+        for (let i = 0; i < keys.length; i += batchSize) {
+          const batch = keys.slice(i, i + batchSize);
+
+          // Run current batch in parallel
+          const batchPromises = batch.map(async (key) => {
+            const result = await testKeyConnectivity(key);
+            return { key, result };
+          });
+
+          // Wait for current batch to complete
+          const results = await Promise.all(batchPromises);
+
+          // Store results
+          results.forEach(({ key, result }) => {
+            localResults[key] = result;
+          });
+
+          // Show progress
+          if (keys.length > batchSize) {
+            const progress = Math.min(i + batchSize, keys.length);
+            showToast(`已测试 ${progress}/${keys.length} 个密钥...`);
+          }
+        }
+      };
+
+      // Process with a reasonable batch size (adjust as needed)
+      const BATCH_SIZE = 10; // Test 10 keys at a time
+      await processBatch(untestedKeys, BATCH_SIZE);
+    }
+
+    // Use our local results collection for filtering
+    const validKeys = keyList.filter(
+      (key) => localResults[key] && localResults[key].success,
+    );
+
+    const invalidKeys = keyList.filter(
+      (key) => !localResults[key] || !localResults[key].success,
+    );
+
+    // Update key list to only include valid keys
+    setKeyList(validKeys);
+
+    // Show results
+    const removedCount = invalidKeys.length;
+    if (removedCount > 0) {
+      showToast(`已移除 ${removedCount} 个失败的密钥`);
+
+      // Log invalid keys for debugging
+      console.log("移除的无效密钥:", invalidKeys);
+      console.log(
+        "失败原因:",
+        invalidKeys.map((key) => ({
+          key,
+          error: localResults[key]?.fullError || "未知错误",
+        })),
+      );
+    } else {
+      showToast("没有发现失败的密钥");
+    }
+  };
+
   const renderApiKeysSection = () => {
     if (isKeyListViewMode) {
       return (
         <div className={styles.keyListContainer}>
+          {/* Add test prompt input and Test All button */}
+          <div className={styles.testConfigContainer}>
+            <label className={styles.testModelLabel}>Test Model:</label>
+            <input
+              type="text"
+              value={testModel}
+              onChange={(e) => setTestModel(e.target.value)}
+              placeholder={
+                providerTypeDefaultTestModel[formData.type] || "gpt-4o-mini"
+              }
+              className={styles.testModelInput}
+            />
+            <IconButton
+              text="Test All Keys"
+              onClick={testAllKeys}
+              bordered
+              disabled={
+                keyList.length === 0 ||
+                Object.values(testingKeys).some((val) => val)
+              }
+            />
+          </div>
+
           <div className={styles.keyInputContainer}>
             <input
               type="text"
@@ -682,246 +1062,101 @@ export function ProviderModal(props: ProviderModalProps) {
               className={styles.keyInput}
               onKeyDown={handleKeyInputKeyDown}
             />
-          </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              marginBottom: "12px",
-              flexWrap: "wrap",
-            }}
-          >
-            <IconButton
-              text={Locale.CustomProvider.AddKey}
-              onClick={addKeyToList}
-              bordered
-            />
-            <IconButton
-              text={Locale.CustomProvider.ClearInput}
-              onClick={() => setNewKey("")}
-              bordered
-            />
-            <IconButton
-              text={Locale.CustomProvider.RefreshBalance}
-              onClick={async () => {
-                setKeyBalances({});
-                // 刷新所有Key的余额
-                const loadingState: Record<string, boolean> = {};
-                keyList.forEach((key) => {
-                  loadingState[key] = true;
-                });
-                setLoadingKeyBalances(loadingState);
-
-                // 并行查询所有key的余额
-                const promises = keyList.map(async (key) => {
-                  try {
-                    let result: any = null;
-                    if (formData.type === "siliconflow") {
-                      result = await useAccessStore
-                        .getState()
-                        .checkSiliconFlowBalance(key, formData.baseUrl);
-                    } else if (formData.type === "deepseek") {
-                      result = await useAccessStore
-                        .getState()
-                        .checkDeepSeekBalance(key, formData.baseUrl);
-                    } else if (
-                      formData.type === "openai" &&
-                      formData.baseUrl !==
-                        providerTypeDefaultUrls[formData.type]
-                    ) {
-                      result = await useAccessStore
-                        .getState()
-                        .checkCustomOpenaiBalance(key, formData.baseUrl);
-                    }
-
-                    // 更新该key的余额信息
-                    if (result && result.isValid && result.totalBalance) {
-                      setKeyBalances((prev) => ({
-                        ...prev,
-                        [key]: `${result.currency} ${result.totalBalance}`,
-                      }));
-                    } else {
-                      setKeyBalances((prev) => ({
-                        ...prev,
-                        [key]: null,
-                      }));
-                    }
-                  } catch (error) {
-                    setKeyBalances((prev) => ({
-                      ...prev,
-                      [key]: null,
-                    }));
-                  } finally {
-                    // 标记该key加载完成
-                    setLoadingKeyBalances((prev) => ({
-                      ...prev,
-                      [key]: false,
-                    }));
-                  }
-                });
-
-                await Promise.all(promises);
-                showToast("所有余额刷新完成");
-              }}
-              bordered
-            />
-            <IconButton
-              text={Locale.CustomProvider.RemoveInvalidKey}
-              onClick={async () => {
-                // 添加确认对话框
-                const confirmContent = (
-                  <div style={{ lineHeight: "1.4" }}>
-                    <div style={{ fontWeight: "500" }}>
-                      此操作将会移除所有无法查询到余额的密钥。
-                    </div>
-
-                    <div
-                      style={{
-                        margin: "8px 0",
-                        padding: "8px 10px",
-                        backgroundColor: "#fff7ed",
-                        borderLeft: "3px solid #f97316",
-                        borderRadius: "4px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: "600",
-                          color: "#c2410c",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        将移除以下类型的密钥:
-                      </div>
-                      <ul
-                        style={{
-                          paddingLeft: "20px",
-                          margin: "4px 0 0 0",
-                          color: "#9a3412",
-                        }}
-                      >
-                        <li>API请求错误的密钥</li>
-                        <li>余额为0或无效的密钥</li>
-                        <li>无法连接的密钥</li>
-                      </ul>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: "8px",
-                        fontWeight: "600",
-                        color: "#dc2626",
-                      }}
-                    >
-                      此操作执行后无法撤回，是否继续？
-                    </div>
-                  </div>
-                );
-                // 如果用户取消，则不执行后续操作
-                if (!(await showConfirm(confirmContent))) {
-                  return;
-                }
-                const validKeys: string[] = [];
-                const invalidKeys: string[] = [];
-                const reasons: Record<string, string> = {};
-
-                showToast("正在检查无效Key...");
-                for (let key of keyList) {
-                  // 检查是否已经有该key的余额信息
-                  if (key in keyBalances) {
-                    // 有余额显示的key被认为是有效的
-                    if (hasValidBalance(keyBalances[key])) {
-                      validKeys.push(key);
-                    } else {
-                      invalidKeys.push(key);
-                      reasons[key] = "缓存余额无效或为空";
-                    }
+            <div className={styles.actions}>
+              <IconButton
+                text={Locale.CustomProvider.AddKey}
+                onClick={addKeyToList}
+                bordered
+              />
+              <IconButton
+                text={Locale.CustomProvider.ClearInput}
+                onClick={() => setNewKey("")}
+                bordered
+              />
+              <IconButton
+                text={Locale.CustomProvider.RefreshBalance}
+                onClick={async () => {
+                  if (formData.baseUrl.endsWith("#")) {
+                    showToast("当前渠道不支持余额查询");
+                    return;
                   } else {
-                    // 如果没有查询过余额，进行查询
-                    try {
-                      let result: any = null;
-                      if (formData.type === "siliconflow") {
-                        result = await useAccessStore
-                          .getState()
-                          .checkSiliconFlowBalance(key, formData.baseUrl);
-                      } else if (formData.type === "deepseek") {
-                        result = await useAccessStore
-                          .getState()
-                          .checkDeepSeekBalance(key, formData.baseUrl);
-                      } else if (
-                        formData.type === "openai" &&
-                        formData.baseUrl !==
-                          providerTypeDefaultUrls[formData.type]
-                      ) {
-                        result = await useAccessStore
-                          .getState()
-                          .checkCustomOpenaiBalance(key, formData.baseUrl);
-                      }
+                    setKeyBalances({});
+                    // 刷新所有Key的余额
+                    const loadingState: Record<string, boolean> = {};
+                    keyList.forEach((key) => {
+                      loadingState[key] = true;
+                    });
+                    setLoadingKeyBalances(loadingState);
 
-                      // 更新余额缓存
-                      if (result && result.isValid && result.totalBalance) {
-                        // 尝试将余额转换为浮点数
-                        const balance = parseFloat(result.totalBalance);
-                        if (!isNaN(balance) && balance > 0) {
-                          validKeys.push(key);
+                    // 并行查询所有key的余额
+                    const promises = keyList.map(async (key) => {
+                      try {
+                        let result: any = null;
+                        if (formData.type === "openrouter") {
+                          result = await useAccessStore
+                            .getState()
+                            .checkOpenRouterBalance(key, formData.baseUrl);
+                        } else if (formData.type === "siliconflow") {
+                          result = await useAccessStore
+                            .getState()
+                            .checkSiliconFlowBalance(key, formData.baseUrl);
+                        } else if (formData.type === "deepseek") {
+                          result = await useAccessStore
+                            .getState()
+                            .checkDeepSeekBalance(key, formData.baseUrl);
+                        } else if (
+                          formData.type === "openai" &&
+                          formData.baseUrl !==
+                            providerTypeDefaultUrls[formData.type]
+                        ) {
+                          result = await useAccessStore
+                            .getState()
+                            .checkCustomOpenaiBalance(key, formData.baseUrl);
+                        }
+
+                        // 更新该key的余额信息
+                        if (result && result.isValid && result.totalBalance) {
                           setKeyBalances((prev) => ({
                             ...prev,
-                            [key]: `${result.currency} ${result.totalBalance}`,
+                            [key]: `${result.currency} ${Number(
+                              result.totalBalance,
+                            ).toFixed(2)}`,
                           }));
                         } else {
-                          invalidKeys.push(key);
-                          reasons[
-                            key
-                          ] = `余额为0或无效: ${result.totalBalance}`;
                           setKeyBalances((prev) => ({
                             ...prev,
                             [key]: null,
                           }));
                         }
-                      } else {
-                        invalidKeys.push(key);
-                        reasons[key] = `API返回无效结果: ${
-                          result?.error || "未知错误"
-                        }`;
+                      } catch (error) {
                         setKeyBalances((prev) => ({
                           ...prev,
                           [key]: null,
                         }));
+                      } finally {
+                        // 标记该key加载完成
+                        setLoadingKeyBalances((prev) => ({
+                          ...prev,
+                          [key]: false,
+                        }));
                       }
-                    } catch (error) {
-                      // 请求失败的key视为无效
-                      invalidKeys.push(key);
-                      reasons[key] = `API请求失败: ${
-                        error instanceof Error ? error.message : "未知错误"
-                      }`;
-                      setKeyBalances((prev) => ({
-                        ...prev,
-                        [key]: null,
-                      }));
-                    }
+                    });
+
+                    await Promise.all(promises);
+                    showToast("所有余额刷新完成");
                   }
-                }
-                console.log(
-                  "无效key列表及原因:",
-                  invalidKeys.map((k) => ({
-                    key: k,
-                    reason: reasons[k],
-                  })),
-                );
-                setKeyList(validKeys);
-                showToast("无效Key已移除");
-                // 显示结果
-                const removedCount = keyList.length - validKeys.length;
-                if (removedCount > 0) {
-                  showToast(`已移除 ${removedCount} 个无效Key`);
-                } else {
-                  showToast("没有发现无效Key");
-                }
-              }}
-              bordered
-            />
+                }}
+                bordered
+              />
+              <IconButton
+                text={Locale.CustomProvider.RemoveInvalidKey}
+                onClick={removeInvalidKeys}
+                bordered
+              />
+            </div>
           </div>
+
           <div className={styles.keyListScroll}>
             {keyList.length === 0 ? (
               <div className={styles.emptyKeys}>
@@ -939,6 +1174,9 @@ export function ProviderModal(props: ProviderModalProps) {
                     type={formData.type}
                     externalBalance={keyBalances[key]}
                     externalLoading={loadingKeyBalances[key]}
+                    testResult={testResults[key]}
+                    isTesting={testingKeys[key]}
+                    onTest={() => testKeyConnectivity(key)}
                   />
                 ))}
               </div>
@@ -1256,6 +1494,7 @@ export function ProviderModal(props: ProviderModalProps) {
                   <option value="openai">OpenAI</option>
                   <option value="siliconflow">SiliconFlow</option>
                   <option value="deepseek">DeepSeek</option>
+                  <option value="openrouter">OpenRouter</option>
                 </Select>
               </ListItem>
               <ListItem
@@ -1290,25 +1529,28 @@ export function ProviderModal(props: ProviderModalProps) {
               <ListItem
                 title="API Key"
                 subTitle={Locale.CustomProvider.ApiKeySubtitle}
+                vertical={isKeyListViewMode}
               >
                 {renderApiKeysSection()}
               </ListItem>
             </>
-            <div className={styles.intelligentParsingContainer}>
-              <textarea
-                placeholder={Locale.CustomProvider.ParsingPlaceholder}
-                value={rawInput}
-                onChange={(e) => setRawInput(e.target.value)}
-                className={styles.parsingTextarea}
-              />
-              <div className={styles.parsingButtonContainer}>
-                <IconButton
-                  text={Locale.CustomProvider.IntelligentParsing}
-                  onClick={parseRawInput}
-                  type="primary"
+            {!isKeyListViewMode && (
+              <div className={styles.intelligentParsingContainer}>
+                <textarea
+                  placeholder={Locale.CustomProvider.ParsingPlaceholder}
+                  value={rawInput}
+                  onChange={(e) => setRawInput(e.target.value)}
+                  className={styles.parsingTextarea}
                 />
+                <div className={styles.parsingButtonContainer}>
+                  <IconButton
+                    text={Locale.CustomProvider.IntelligentParsing}
+                    onClick={parseRawInput}
+                    type="primary"
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </List>
         )}
         {currentStep === 2 && (

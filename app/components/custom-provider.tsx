@@ -8,7 +8,11 @@ import Locale from "../locales";
 import { showToast, showConfirm } from "./ui-lib";
 import { useAccessStore } from "../store";
 import { userCustomProvider } from "../client/api";
-import { ProviderModal } from "./provider-modal";
+import {
+  ProviderModal,
+  providerTypeLabels,
+  providerTypeDefaultUrls,
+} from "./provider-modal";
 // 导入图标
 import PlusIcon from "../icons/add.svg";
 import EditIcon from "../icons/edit.svg";
@@ -16,22 +20,11 @@ import TrashIcon from "../icons/delete.svg";
 import CloseIcon from "../icons/close.svg";
 import LoadingIcon from "../icons/loading.svg";
 import SearchIcon from "../icons/zoom.svg";
+import EnableIcon from "../icons/light.svg";
+import DisableIcon from "../icons/lightning.svg";
+import DownloadIcon from "../icons/download.svg";
+import UploadIcon from "../icons/upload.svg";
 
-// 获取提供商类型标签
-const providerTypeLabels: Record<string, string> = {
-  openai: "OpenAI",
-  siliconflow: "SiliconFlow",
-  deepseek: "DeepSeek",
-  // azure: 'Azure OpenAI',
-  // anthropic: 'Anthropic',
-  // custom: '自定义API',
-};
-// 获取提供商默认的地址
-const providerTypeDefaultUrls: Record<string, string> = {
-  openai: "https://api.openai.com",
-  siliconflow: "https://api.siliconflow.cn",
-  deepseek: "https://api.deepseek.com",
-};
 function getAvailableModelsTooltip(provider: userCustomProvider) {
   if (!provider.models || provider.models.length === 0)
     return "No available models";
@@ -459,6 +452,199 @@ export function CustomProvider() {
       showToast(`已成功移除 ${searchedProviders.length} 个供应商`);
     }
   };
+  // 批量启用供应商函数
+  const handleBatchEnableProviders = async () => {
+    // 获取符合搜索条件的供应商
+    const searchedProviders = filteredProviders;
+
+    if (searchedProviders.length === 0) {
+      showToast("没有禁用的供应商");
+      return;
+    }
+
+    const confirmContent = (
+      <div style={{ lineHeight: "1.4" }}>
+        <div style={{ marginBottom: "8px" }}>确定要启用选中的供应商吗？</div>
+
+        <div
+          style={{
+            padding: "8px 10px",
+            borderLeft: "3px solid #34d399",
+            backgroundColor: "#ecfdf5",
+            margin: "8px 0",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "600",
+              color: "#059669",
+              marginBottom: "4px",
+            }}
+          >
+            将启用以下供应商:
+          </div>
+          <div
+            style={{
+              maxHeight: "150px",
+              overflowY: "auto",
+              paddingRight: "5px",
+            }}
+          >
+            {searchedProviders.map((provider, index) => (
+              <div
+                key={provider.id}
+                style={{
+                  marginBottom: "4px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ fontWeight: "500" }}>
+                  {index + 1}. {provider.name}
+                </span>
+                <span
+                  style={{
+                    color: "#6b7280",
+                    fontSize: "13px",
+                    marginLeft: "8px",
+                  }}
+                >
+                  {provider.type}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              marginTop: "8px",
+              color: "#059669",
+              fontWeight: "500",
+              fontSize: "14px",
+            }}
+          >
+            共 {searchedProviders.length} 个供应商
+          </div>
+        </div>
+
+        <div
+          style={{
+            fontSize: "14px",
+            color: "#6b7280",
+            marginTop: "8px",
+          }}
+        >
+          确认是否继续？
+        </div>
+      </div>
+    );
+
+    if (await showConfirm(confirmContent)) {
+      const updatedProviders = providers.map((p) =>
+        p.status === "inactive" ? { ...p, status: "active" as const } : p,
+      );
+      setProviders(updatedProviders);
+      saveProvidersToStorage(updatedProviders);
+
+      showToast(`已成功启用 ${searchedProviders.length} 个供应商`);
+    }
+  };
+
+  // 批量禁用供应商函数
+  const handleBatchDisableProviders = async () => {
+    // 获取符合搜索条件的供应商
+    const searchedProviders = filteredProviders;
+
+    if (searchedProviders.length === 0) {
+      showToast("没有启用的供应商");
+      return;
+    }
+
+    const confirmContent = (
+      <div style={{ lineHeight: "1.4" }}>
+        <div style={{ marginBottom: "8px" }}>确定要禁用选中的供应商吗？</div>
+
+        <div
+          style={{
+            padding: "8px 10px",
+            borderLeft: "3px solid #f87171",
+            backgroundColor: "#fef2f2",
+            margin: "8px 0",
+          }}
+        >
+          <div
+            style={{
+              fontWeight: "600",
+              color: "#b91c1c",
+              marginBottom: "4px",
+            }}
+          >
+            将禁用以下供应商:
+          </div>
+          <div
+            style={{
+              maxHeight: "150px",
+              overflowY: "auto",
+              paddingRight: "5px",
+            }}
+          >
+            {searchedProviders.map((provider, index) => (
+              <div
+                key={provider.id}
+                style={{
+                  marginBottom: "4px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ fontWeight: "500" }}>
+                  {index + 1}. {provider.name}
+                </span>
+                <span
+                  style={{
+                    color: "#6b7280",
+                    fontSize: "13px",
+                    marginLeft: "8px",
+                  }}
+                >
+                  {provider.type}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              marginTop: "8px",
+              color: "#b91c1c",
+              fontWeight: "500",
+              fontSize: "14px",
+            }}
+          >
+            共 {searchedProviders.length} 个供应商
+          </div>
+        </div>
+
+        <div
+          style={{
+            fontSize: "14px",
+            color: "#6b7280",
+            marginTop: "8px",
+          }}
+        >
+          确认是否继续？
+        </div>
+      </div>
+    );
+
+    if (await showConfirm(confirmContent)) {
+      const updatedProviders = providers.map((p) =>
+        p.status === "active" ? { ...p, status: "inactive" as const } : p,
+      );
+      setProviders(updatedProviders);
+      saveProvidersToStorage(updatedProviders);
+
+      showToast(`已成功禁用 ${searchedProviders.length} 个供应商`);
+    }
+  };
   // 获取模型数量展示文本
   const getModelCountText = (provider: userCustomProvider) => {
     const count = provider.models?.filter((m) => m.available).length || 0;
@@ -474,6 +660,20 @@ export function CustomProvider() {
     const accessStore = useAccessStore.getState();
     const { id, apiKey, baseUrl, type } = provider;
 
+    if (baseUrl.endsWith("#")) {
+      showToast("当前渠道不支持余额查询");
+      return;
+    }
+
+    // if (provider.balance) {
+    //   const updatedProviders = providers.map((p) =>
+    //     p.id === provider.id ? { ...p, balance: undefined } : p,
+    //   );
+    //   setProviders(updatedProviders);
+    //   saveProvidersToStorage(updatedProviders);
+    //   return;
+    // }
+
     const keys = apiKey
       .split(",")
       .map((k) => k.trim())
@@ -483,27 +683,29 @@ export function CustomProvider() {
       return;
     }
 
-    if (providerBalances[id]) {
-      setProviderBalances((prev) => {
-        const newBalances = { ...prev };
-        delete newBalances[id];
-        return newBalances;
-      });
-      return;
-    }
-
-    let totalBalance = 0;
-    let currency = "";
+    // if (providerBalances[id]) {
+    //   setProviderBalances((prev) => {
+    //     const newBalances = { ...prev };
+    //     delete newBalances[id];
+    //     return newBalances;
+    //   });
+    //   return;
+    // }
 
     // 设置当前提供商的加载状态
     setLoadingBalances((prev) => ({ ...prev, [id]: true }));
 
     try {
+      let totalBalance = 0;
+      let currency = "";
+
       // 使用 Promise.all 来并行获取所有 key 的余额
       const balancePromises = keys.map(async (key) => {
         try {
           let result = null;
-          if (type === "siliconflow") {
+          if (type === "openrouter") {
+            result = await accessStore.checkOpenRouterBalance(key, baseUrl);
+          } else if (type === "siliconflow") {
             result = await accessStore.checkSiliconFlowBalance(key, baseUrl);
           } else if (type === "deepseek") {
             result = await accessStore.checkDeepSeekBalance(key, baseUrl);
@@ -518,7 +720,9 @@ export function CustomProvider() {
             if (!currency && result.currency) {
               currency = result.currency;
             }
-            return parseFloat(result.totalBalance);
+            return typeof result.totalBalance === "string"
+              ? parseFloat(result.totalBalance) || 0
+              : Number(result.totalBalance) || 0;
           } else {
             throw new Error(result?.error || "查询失败或不支持查询");
           }
@@ -531,11 +735,26 @@ export function CustomProvider() {
       const balances = await Promise.all(balancePromises);
       totalBalance = balances.reduce((acc, curr) => acc + curr, 0);
 
-      // 更新余额状态
-      setProviderBalances((prev) => ({
-        ...prev,
-        [id]: `${currency} ${totalBalance.toFixed(2)}`,
-      }));
+      const updatedProviders = providers.map((p) =>
+        p.id === provider.id
+          ? {
+              ...p,
+              balance: {
+                amount: totalBalance,
+                currency,
+                lastUpdated: new Date().toISOString(),
+              },
+            }
+          : p,
+      );
+      setProviders(updatedProviders);
+      saveProvidersToStorage(updatedProviders);
+
+      // // 更新余额状态
+      // setProviderBalances((prev) => ({
+      //   ...prev,
+      //   [id]: `${currency} ${totalBalance.toFixed(2)}`,
+      // }));
 
       showToast(`总余额: ${currency} ${totalBalance.toFixed(2)}`);
     } catch (error) {
@@ -544,6 +763,11 @@ export function CustomProvider() {
     } finally {
       setLoadingBalances((prev) => ({ ...prev, [id]: false }));
     }
+  };
+
+  const getBalanceText = (provider: userCustomProvider) => {
+    if (!provider.balance) return null;
+    return `${provider.balance.currency} ${provider.balance.amount.toFixed(2)}`;
   };
 
   return (
@@ -570,7 +794,7 @@ export function CustomProvider() {
           <IconButton
             icon={<CloseIcon />}
             bordered
-            onClick={() => navigate(Path.Settings)}
+            onClick={() => navigate(Path.Home)}
             title={Locale.CustomProvider.Return}
           />
         </div>
@@ -600,13 +824,26 @@ export function CustomProvider() {
             title="移除搜索结果中的所有供应商"
             disabled={!searchTerm.trim()}
           />
+          <IconButton
+            icon={<EnableIcon />} // 需要一个启用图标
+            text="批量启用"
+            bordered
+            onClick={handleBatchEnableProviders}
+            title="批量启用供应商"
+          />
+          <IconButton
+            icon={<DisableIcon />} // 需要一个禁用图标
+            text="批量禁用"
+            bordered
+            onClick={handleBatchDisableProviders}
+            title="批量禁用供应商"
+          />
           {searchTerm && (
-            <span
-              className={styles.clearButton}
+            <IconButton
+              icon={<CloseIcon />}
               onClick={() => setSearchTerm("")}
-            >
-              <CloseIcon />
-            </span>
+              bordered
+            />
           )}
         </div>
       </div>
@@ -664,6 +901,14 @@ export function CustomProvider() {
                           : Locale.CustomProvider.Status.Disabled}
                       </span>
                     )}
+                    {provider.balance && (
+                      <span
+                        className={styles.metaItem}
+                        style={{ backgroundColor: "#FEEBC8", color: "#92400E" }}
+                      >
+                        {getBalanceText(provider)}
+                      </span>
+                    )}
                     {provider.baseUrl && (
                       <span
                         className={styles.metaItem}
@@ -713,12 +958,16 @@ export function CustomProvider() {
                       <SearchIcon />
                     )
                   }
-                  text={providerBalances[provider.id] || "查询余额"}
+                  text={
+                    loadingBalances[provider.id]
+                      ? "查询中..."
+                      : provider.balance
+                      ? "更新余额"
+                      : "查询余额"
+                  }
                   onClick={() => handleSumBalances(provider)}
                   title={
-                    providerBalances[provider.id]
-                      ? "点击清除"
-                      : "查询所有密钥余额"
+                    provider.balance ? "点击更新余额信息" : "查询所有密钥余额"
                   }
                   bordered
                   className={

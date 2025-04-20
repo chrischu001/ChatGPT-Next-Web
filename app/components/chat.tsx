@@ -623,17 +623,15 @@ export function ChatActions(props: {
       },
       onFinish(message, responseRes) {
         if (responseRes?.status === 200) {
+          if (typeof message !== "string") {
+            message = message.content;
+          }
           if (!isValidMessage(message)) {
             showToast(Locale.Chat.InputActions.Translate.FailTranslateToast);
             return;
           }
 
-          let translatedContent: string;
-          if (typeof message === "string") {
-            translatedContent = message;
-          } else {
-            translatedContent = message.content;
-          }
+          let translatedContent = message;
           translatedContent = translatedContent || props.userInput; // 避免空翻译无法撤销
 
           // 保存原始文本和翻译结果以便撤销
@@ -865,18 +863,23 @@ export function ChatActions(props: {
     const fileInput = document.createElement("input");
     fileInput.type = "file";
 
-    // 设置接受的文件类型
-    if (canUploadImage) {
-      // 支持图片和文本文件
-      const imageTypes =
-        "image/png, image/jpeg, image/webp, image/heic, image/heif";
-      const textTypes = textFileExtensions.map((ext) => `.${ext}`).join(",");
-      fileInput.accept = `${imageTypes}, ${textTypes}`;
-    } else {
-      // 只支持文本文件
-      fileInput.accept = textFileExtensions.map((ext) => `.${ext}`).join(",");
-    }
+    // // 设置接受的文件类型
+    // if (canUploadImage) {
+    //   // 支持图片和文本文件
+    //   const imageTypes =
+    //     "image/png, image/jpeg, image/webp, image/heic, image/heif";
+    //   const textTypes = textFileExtensions.map((ext) => `.${ext}`).join(",");
+    //   fileInput.accept = `${imageTypes}, ${textTypes}`;
+    // } else {
+    //   // 只支持文本文件
+    //   fileInput.accept = textFileExtensions.map((ext) => `.${ext}`).join(",");
+    // }
 
+    // Always accept image files, regardless of model
+    const imageTypes =
+      "image/png, image/jpeg, image/webp, image/heic, image/heif";
+    const textTypes = textFileExtensions.map((ext) => `.${ext}`).join(",");
+    fileInput.accept = `${imageTypes}, ${textTypes}`;
     fileInput.multiple = true;
 
     fileInput.onchange = async (event: any) => {
@@ -892,14 +895,15 @@ export function ChatActions(props: {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (file.type.startsWith("image/")) {
-          if (canUploadImage) {
-            imageFiles.push(file);
-          } else {
-            showToast(
-              Locale.Chat.InputActions.UploadFile.UnsupportToUploadImage,
-            );
-            continue;
-          }
+          imageFiles.push(file);
+          // if (canUploadImage) {
+          //   imageFiles.push(file);
+          // } else {
+          //   showToast(
+          //     Locale.Chat.InputActions.UploadFile.UnsupportToUploadImage,
+          //   );
+          //   continue;
+          // }
         } else {
           textFiles.push(file);
         }
@@ -1060,7 +1064,7 @@ export function ChatActions(props: {
     const show = isVisionModel(currentModel);
     setShowUploadImage(show);
     if (!show) {
-      setAttachImages([]);
+      // setAttachImages([]);
       setUploading(false);
     }
 
@@ -1193,7 +1197,7 @@ export function ChatActions(props: {
           icon={<PrivacyModeIcon />}
           onClick={() => {
             if (!session?.inPrivateMode) {
-              chatStore.newSession(session.mask, true);
+              chatStore.newSession(undefined, true);
               showToast(Locale.Chat.InputActions.PrivateMode.OnToast);
             } else {
               chatStore.deleteSession(chatStore.currentSessionIndex);
@@ -1701,7 +1705,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
           session.messages[session.messages.length - 1].beClear = true;
         }
       }),
-    new: () => chatStore.newSession(session.mask),
+    new: () => chatStore.newSession(),
     search: () => navigate(Path.SearchChat),
     newm: () => navigate(Path.NewChat),
     prev: () => chatStore.nextSession(-1),
@@ -1768,10 +1772,16 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       return;
     }
     setIsLoading(true);
-    chatStore
-      .onUserInput(userInput, attachImages, attachFiles)
-      .then(() => setIsLoading(false));
-    setAttachImages([]);
+    if (canUploadImage) {
+      chatStore
+        .onUserInput(userInput, attachImages, attachFiles)
+        .then(() => setIsLoading(false));
+      setAttachImages([]);
+    } else {
+      chatStore
+        .onUserInput(userInput, [], attachFiles)
+        .then(() => setIsLoading(false));
+    }
     setAttachFiles([]);
     chatStore.setLastInput(userInput);
     setUserInput("");
@@ -2298,18 +2308,23 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Extract these as shared variables in the ChatComponent function
+  const modelName = session.mask.modelConfig.model;
+  const providerName =
+    session.mask.modelConfig.providerName || ServiceProvider.OpenAI;
+  // Find the current model info from modelTable
+  const currentModelInfo = useMemo(() => {
+    return modelTable.find(
+      (m) => m.name === modelName && m.provider?.providerName === providerName,
+    );
+  }, [modelName, providerName, modelTable]);
+  // Determine if the model supports vision
+  const canUploadImage = useMemo(() => {
+    return isVisionModel(modelName) || !!currentModelInfo?.enableVision;
+  }, [modelName, currentModelInfo]);
+
   const handlePaste = useCallback(
     async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const currentModel = chatStore.currentSession().mask.modelConfig.model;
-      const currentProviderName =
-        chatStore.currentSession().mask.modelConfig.providerName;
-      const currentModelInfo = modelTable.find(
-        (m) =>
-          m.name === currentModel &&
-          m.provider?.providerName === currentProviderName,
-      );
-      const canUploadImage =
-        isVisionModel(currentModel) || !!currentModelInfo?.enableVision;
       const items = (event.clipboardData || window.clipboardData).items;
 
       // 检查是否有文本内容
@@ -2372,12 +2387,12 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
           if (file) {
             // 处理图片文件
             if (item.type.startsWith("image/")) {
-              if (!canUploadImage) {
-                showToast(
-                  Locale.Chat.InputActions.UnsupportedModelForUploadImage,
-                );
-                continue;
-              }
+              // if (!canUploadImage) {
+              //   showToast(
+              //     Locale.Chat.InputActions.UnsupportedModelForUploadImage,
+              //   );
+              //   continue;
+              // }
               const images: string[] = [];
               images.push(...attachImages);
               images.push(
@@ -2470,7 +2485,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
         }
       }
     },
-    [attachImages, attachFiles, chatStore, modelTable],
+    [attachImages, attachFiles, canUploadImage],
   );
 
   function supportFileType(filename: string) {
@@ -2626,7 +2641,7 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
       ) {
         event.preventDefault();
         setTimeout(() => {
-          chatStore.newSession(session.mask);
+          chatStore.newSession();
           navigate(Path.Chat);
         }, 10);
       }
@@ -3260,9 +3275,22 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
             attachImages.length != 0 || attachFiles.length != 0
               ? styles["chat-input-panel-inner-attach"]
               : ""
-          } ${enableParamOverride ? styles["with-param-override"] : ""}`}
+          } ${enableParamOverride ? styles["with-param-override"] : ""} ${
+            attachImages.length > 0 && !canUploadImage
+              ? styles["with-vision-warning"]
+              : ""
+          }`}
           htmlFor="chat-input"
         >
+          {attachImages.length > 0 && !canUploadImage && (
+            <div className={styles["vision-warning-header"]}>
+              <div className={styles["vision-warning-indicator"]}>
+                <div className={styles["vision-warning-icon"]}>
+                  {Locale.Settings.DocumentUploadWarning}
+                </div>
+              </div>
+            </div>
+          )}
           {enableParamOverride && (
             <div className={styles["param-override-header"]}>
               <div className={styles["param-override-indicator"]}>
@@ -3484,17 +3512,42 @@ export function Chat() {
 
   const modelTable = useMemo(() => {
     const filteredModels = allModels.filter((m) => m.available);
-    const defaultModel = filteredModels.find((m) => m.isDefault);
+    const modelMap = new Map<string, (typeof allModels)[0]>();
+
+    filteredModels.forEach((model) => {
+      const key = `${model.name}@${model?.provider?.id}`;
+
+      if (modelMap.has(key)) {
+        // 合并已存在的模型
+        const existingModel = modelMap.get(key)!;
+
+        // 合并 description（如果新模型有 description 而旧模型没有）
+        if (model.description && !existingModel.description) {
+          existingModel.description = model.description;
+        }
+        if (model.displayName && !existingModel.displayName) {
+          existingModel.displayName = model.displayName;
+        }
+        if (model.isDefault) {
+          existingModel.isDefault = true;
+        }
+      } else {
+        // 添加新模型
+        modelMap.set(key, { ...model });
+      }
+    });
+
+    // 转换为数组
+    const mergedModels = Array.from(modelMap.values());
+
+    // 确保默认模型排在第一位
+    const defaultModel = mergedModels.find((m) => m.isDefault);
 
     if (defaultModel) {
-      const arr = [
-        defaultModel,
-        ...filteredModels.filter((m) => m !== defaultModel),
-      ];
-      return arr;
-    } else {
-      return filteredModels;
+      return [defaultModel, ...mergedModels.filter((m) => m !== defaultModel)];
     }
+
+    return mergedModels;
   }, [allModels]);
   // Update session messages based on modelTable
   useEffect(() => {
