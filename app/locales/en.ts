@@ -212,6 +212,7 @@ const en: LocaleType = {
     },
     Rename: "Rename Chat",
     Typing: "Typing…",
+    GoToCustomProviderConfig: "Go to Custom AI Provider Config",
     Input: (submitKey: string, isMobileScreen: boolean = false) => {
       if (isMobileScreen) {
         return "/ to search prompts, : to use commands\nInput your question...";
@@ -413,7 +414,7 @@ const en: LocaleType = {
 
       LocalState: "Local Data",
       Overview: (overview: any) => {
-        return `${overview.chat} chats，${overview.message} messages，${overview.prompt} prompts，${overview.mask} masks`;
+        return `${overview.chat} chats，${overview.message} messages，${overview.prompt} prompts，${overview.mask} masks， ${overview.provider} providers`;
       },
       ImportFailed: "Failed to import from file",
     },
@@ -483,6 +484,7 @@ const en: LocaleType = {
       CustomEndpoint: {
         Title: "Custom Endpoint",
         SubTitle: "Use custom Azure or OpenAI service",
+        Advanced: "Click to configure advanced settings",
       },
       Provider: {
         Title: "Model Provider",
@@ -936,6 +938,26 @@ const en: LocaleType = {
       JsonView: "JSON View",
       ApplyJson: "Apply JSON Mapping",
       EditJson: 'Edit JSON mapping (format: "Model: Model Alias")',
+    },
+    advancedSettings: {
+      title: "Advanced Settings",
+      subtitle: "Configure custom API paths",
+    },
+    chatPath: {
+      title: "Chat Path",
+      subtitle: "Custom API endpoint path for chat completion requests",
+    },
+    speechPath: {
+      title: "Speech Path",
+      subtitle: "Custom API endpoint path for text-to-speech requests",
+    },
+    imagePath: {
+      title: "Image Path",
+      subtitle: "Custom API endpoint path for image generation requests",
+    },
+    listModelPath: {
+      title: "Model List Path",
+      subtitle: "Custom API endpoint path for retrieving model list",
     },
   },
   URLCommand: {

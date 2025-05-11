@@ -197,6 +197,7 @@ const cn = {
     },
     Rename: "重命名对话",
     Typing: "正在输入…",
+    GoToCustomProviderConfig: "点击跳转对应的渠道配置",
     Input: (submitKey: string, isMobileScreen: boolean = false) => {
       if (isMobileScreen) {
         return "/ 触发预设，: 触发命令\n输入你的问题...";
@@ -398,7 +399,7 @@ const cn = {
 
       LocalState: "本地数据",
       Overview: (overview: any) => {
-        return `${overview.chat} 次对话，${overview.message} 条消息，${overview.prompt} 条提示词，${overview.mask} 个面具`;
+        return `${overview.chat} 次对话，${overview.message} 条消息，${overview.prompt} 条提示词，${overview.mask} 个面具，${overview.provider} 个自定义渠道`;
       },
       ImportFailed: "导入失败",
     },
@@ -467,6 +468,7 @@ const cn = {
       CustomEndpoint: {
         Title: "自定义接口",
         SubTitle: "是否使用自定义 Azure 或 OpenAI 服务",
+        Advanced: "点击前往高级自定义功能",
       },
       Provider: {
         Title: "模型服务商",
@@ -905,6 +907,26 @@ const cn = {
       JsonView: "JSON视图",
       ApplyJson: "应用 JSON 映射",
       EditJson: "编辑 JSON 映射, 格式：“模型: 模型别名” ",
+    },
+    advancedSettings: {
+      title: "高级设置",
+      subtitle: "配置自定义API路径",
+    },
+    chatPath: {
+      title: "聊天路径",
+      subtitle: "自定义聊天完成请求的API端点路径",
+    },
+    speechPath: {
+      title: "语音路径",
+      subtitle: "自定义文本转语音请求的API端点路径",
+    },
+    imagePath: {
+      title: "图像路径",
+      subtitle: "自定义图像生成请求的API端点路径",
+    },
+    listModelPath: {
+      title: "模型列表路径",
+      subtitle: "自定义获取模型列表的API端点路径",
     },
   },
 };

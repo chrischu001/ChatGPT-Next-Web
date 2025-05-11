@@ -20,6 +20,7 @@ import {
   MultimodalContent,
   SpeechOptions,
   RichMessage,
+  findProviderInLocalStorage,
 } from "../api";
 import Locale from "../../locales";
 import {
@@ -63,14 +64,37 @@ interface RequestPayload {
 
 export class ChatGPTApi implements LLMApi {
   private disableListModels = true;
+  private readonly baseUrl: string = "";
+  private readonly apiKey: string = "";
+  private readonly chatPath: string = "";
+  private readonly imagePath: string = "";
+  private readonly speechPath: string = "";
+  private readonly listModelPath: string = "";
+
+  constructor(providerName: string = "") {
+    if (providerName) {
+      const CustomProviderConfig = findProviderInLocalStorage(providerName);
+      if (CustomProviderConfig) {
+        this.baseUrl = CustomProviderConfig.baseUrl;
+        this.apiKey = CustomProviderConfig.apiKey;
+        this.chatPath = CustomProviderConfig?.paths?.ChatPath || "";
+        this.imagePath = CustomProviderConfig?.paths?.ImagePath || "";
+        this.speechPath = CustomProviderConfig?.paths?.SpeechPath || "";
+        this.listModelPath = CustomProviderConfig?.paths?.ListModelPath || "";
+      }
+    }
+  }
 
   path(path: string): string {
     const accessStore = useAccessStore.getState();
-
+    // console.log("[openai.ts] access: ", accessStore);
     let baseUrl = "";
-    if (accessStore.useCustomProvider) {
-      baseUrl = accessStore.customProvider_baseUrl;
-    } else if (accessStore.useCustomConfig) {
+    if (this.baseUrl) {
+      baseUrl = this.baseUrl;
+    } else {
+      // if (accessStore.useCustomProvider) {
+      //   baseUrl = accessStore.customProvider_baseUrl;
+      // } else if (accessStore.useCustomConfig) {
       const isAzure = accessStore.provider === ServiceProvider.Azure;
 
       if (isAzure && !accessStore.isValidAzure()) {
@@ -84,25 +108,26 @@ export class ChatGPTApi implements LLMApi {
       }
 
       baseUrl = isAzure ? accessStore.azureUrl : accessStore.openaiUrl;
+      // }
+
+      if (baseUrl.length === 0) {
+        const isApp = !!getClientConfig()?.isApp;
+        baseUrl = isApp
+          ? DEFAULT_API_HOST + "/proxy" + ApiPath.OpenAI
+          : ApiPath.OpenAI;
+      }
+
+      if (baseUrl.endsWith("/")) {
+        baseUrl = baseUrl.slice(0, baseUrl.length - 1);
+      }
+      if (!baseUrl.startsWith("http") && !baseUrl.startsWith(ApiPath.OpenAI)) {
+        baseUrl = "https://" + baseUrl;
+      }
     }
 
-    if (baseUrl.length === 0) {
-      const isApp = !!getClientConfig()?.isApp;
-      baseUrl = isApp
-        ? DEFAULT_API_HOST + "/proxy" + ApiPath.OpenAI
-        : ApiPath.OpenAI;
-    }
+    console.log("[Proxy Endpoint] ", baseUrl, path);
 
-    if (baseUrl.endsWith("/")) {
-      baseUrl = baseUrl.slice(0, baseUrl.length - 1);
-    }
-    if (!baseUrl.startsWith("http") && !baseUrl.startsWith(ApiPath.OpenAI)) {
-      baseUrl = "https://" + baseUrl;
-    }
-
-    // console.log("[Proxy Endpoint] ", baseUrl, path);
-
-    return [baseUrl, path].join("/");
+    return [baseUrl.replace(/\/$/, ""), path.replace(/^\//, "")].join("/");
   }
 
   async extractMessage(res: any) {
@@ -155,12 +180,12 @@ export class ChatGPTApi implements LLMApi {
     options.onController?.(controller);
 
     try {
-      const speechPath = this.path(OpenaiPath.SpeechPath);
+      const speechPath = this.path(this.speechPath || OpenaiPath.SpeechPath);
       const speechPayload = {
         method: "POST",
         body: JSON.stringify(requestPayload),
         signal: controller.signal,
-        headers: getHeaders(),
+        headers: getHeaders(false, this.apiKey),
       };
 
       // make a fetch request
@@ -361,12 +386,12 @@ export class ChatGPTApi implements LLMApi {
     options.onController?.(controller);
 
     try {
-      const chatPath = this.path(OpenaiPath.ChatPath);
+      const chatPath = this.path(this.chatPath || OpenaiPath.ChatPath);
       const chatPayload = {
         method: "POST",
         body: JSON.stringify(requestPayload),
         signal: controller.signal,
-        headers: getHeaders(),
+        headers: getHeaders(false, this.apiKey),
       };
 
       // make a fetch request
@@ -732,12 +757,12 @@ export class ChatGPTApi implements LLMApi {
         ),
         {
           method: "GET",
-          headers: getHeaders(),
+          headers: getHeaders(false, this.apiKey),
         },
       ),
       fetch(this.path(OpenaiPath.SubsPath), {
         method: "GET",
-        headers: getHeaders(),
+        headers: getHeaders(false, this.apiKey),
       }),
     ]);
 
@@ -784,12 +809,15 @@ export class ChatGPTApi implements LLMApi {
       return DEFAULT_MODELS.slice();
     }
 
-    const res = await fetch(this.path(OpenaiPath.ListModelPath), {
-      method: "GET",
-      headers: {
-        ...getHeaders(),
+    const res = await fetch(
+      this.path(this.listModelPath || OpenaiPath.ListModelPath),
+      {
+        method: "GET",
+        headers: {
+          ...getHeaders(false, this.apiKey),
+        },
       },
-    });
+    );
 
     const resJson = (await res.json()) as OpenAIListModelResponse;
     const chatModels = resJson.data?.filter(

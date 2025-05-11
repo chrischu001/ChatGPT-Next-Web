@@ -31,6 +31,7 @@ import { safeLocalStorage, readFileContent } from "../utils";
 import { indexedDBStorage } from "@/app/utils/indexedDB-storage";
 import { useAccessStore } from "./access";
 import { ServiceProvider } from "../constant";
+import { useCustomProviderStore } from "./provider";
 
 const localStorage = safeLocalStorage();
 
@@ -42,6 +43,8 @@ export type ChatMessage = RequestMessage & {
   model?: ModelType;
   displayName?: string;
   providerName?: string;
+  providerId?: string;
+  providerType?: string;
   beClear?: boolean;
   isContinuePrompt?: boolean;
   isStreamRequest?: boolean;
@@ -811,42 +814,12 @@ export const useChatStore = createPersistStore(
         const modelConfig = session.mask.modelConfig;
         let compressModel = modelConfig.compressModel;
         let providerName = modelConfig.compressProviderName;
-        // console.log("000 compressModel:", compressModel);
-        // console.log("providerName: ", providerName);
         if (!providerName && access.compressModel) {
           let providerNameStr;
           [compressModel, providerNameStr] = access.compressModel.split("@");
           providerName = providerNameStr as ServiceProvider;
         }
 
-        // console.log("111 compressModel:", compressModel);
-        // console.log("providerName: ", providerName);
-        try {
-          const storedProvidersData = safeLocalStorage().getItem(
-            StoreKey.CustomProvider,
-          );
-          const providers = storedProvidersData
-            ? JSON.parse(storedProvidersData)
-            : [];
-
-          const provider = Array.isArray(providers)
-            ? providers.find((provider) => provider.name === providerName)
-            : null;
-          if (provider?.baseUrl && provider?.apiKey) {
-            // 使用解构赋值和可选链操作符
-            access.useCustomProvider = true;
-            access.customProvider_apiKey = provider.apiKey;
-            access.customProvider_baseUrl = provider.baseUrl;
-            access.customProvider_type = provider.type;
-          } else {
-            access.useCustomProvider = false;
-          }
-        } catch (error) {
-          console.error("Error processing custom providers:", error);
-          access.useCustomProvider = false;
-        }
-        // console.log("222 compressModel:", compressModel);
-        // console.log("providerName: ", providerName);
         const api: ClientApi = getClientApi(providerName);
 
         // remove error messages if any

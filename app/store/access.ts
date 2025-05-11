@@ -203,14 +203,17 @@ export const useAccessStore = createPersistStore(
     async fetchAvailableModels(
       url: string,
       apiKey: string,
+      modelspath: string = "/v1/models",
       type: string = "openai",
     ): Promise<string> {
       // if (fetchState !== 0) return Promise.resolve(DEFAULT_ACCESS_STATE.customModels);
       fetchState = 1;
-      const baseUrl = url.replace(/\/+$/, "");
-      const path = type === "deepseek" ? "/models" : "/v1/models";
+      const endpoint = [
+        url.replace(/\/$/, ""),
+        modelspath.replace(/^\//, ""),
+      ].join("/");
 
-      return fetch(`${baseUrl}${path}`, {
+      return fetch(endpoint, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${apiKey}`,
