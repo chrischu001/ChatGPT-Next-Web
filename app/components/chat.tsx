@@ -98,6 +98,7 @@ import dynamic from "next/dynamic";
 
 import { ChatControllerPool } from "../client/controller";
 import { Prompt, usePromptStore } from "../store/prompt";
+import { useExpansionRulesStore } from "../store/expansionRules";
 import Locale from "../locales";
 
 import { IconButton } from "./button";
@@ -1668,6 +1669,28 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     { leading: true, trailing: true },
   );
 
+  // expansive rules
+  const [lastExpansion, setLastExpansion] = useState<{
+    originalText: string;
+    replacedText: string;
+    triggerLength: number;
+  } | null>(null);
+  const processVariables = (text: string) => {
+    const now = new Date();
+    return text.replace(/{{(\w+)}}/g, (match, variable) => {
+      switch (variable) {
+        case "datetime":
+          return now.toLocaleString();
+        case "time":
+          return now.toLocaleTimeString();
+        case "date":
+          return now.toLocaleDateString();
+        default:
+          return match;
+      }
+    });
+  };
+
   // auto grow input
   const minInputRows = 3;
   const [inputRows, setInputRows] = useState(minInputRows);
@@ -1767,29 +1790,102 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
   // only search prompts when user input is short
   const SEARCH_TEXT_LIMIT = 30;
   const onInput = (text: string) => {
-    setUserInput(text);
-    const n = text.trim().length;
+    let shouldProcessNormally = true;
 
-    // const atMatch = text.match(/^@([\w-]*)$/); // 完整匹配 @ 后面任意单词或短线
-    const atMatch = text.match(/^@(\S*)$/); // 完整匹配 @ 后面非空字符
-    if (!isMobileScreen && atMatch) {
-      setModelAtQuery(atMatch[1]);
-      setShowModelAtSelector(true);
-      setModelAtSelectIndex(0);
-    } else {
-      setShowModelAtSelector(false);
+    // 只有在功能启用时才处理替换和还原逻辑
+    if (config.enableTextExpansion) {
+      // 1. 首先检查是否需要还原 - 检测到删除操作后立即还原
+      if (lastExpansion && text.length < lastExpansion.replacedText.length) {
+        // 只要检测到删除操作（文本变短），立即还原，不考虑删除到什么位置
+        setUserInput(lastExpansion.originalText);
+        setLastExpansion(null);
+        shouldProcessNormally = false;
+      }
+      // 2. 如果不需要还原，检查是否匹配替换规则
+      else {
+        const enabledRules = useExpansionRulesStore
+          .getState()
+          .getEnabledRules();
+        for (const rule of enabledRules) {
+          if (text.endsWith(rule.trigger)) {
+            const beforeTrigger = text.slice(
+              0,
+              text.length - rule.trigger.length,
+            );
+            const processedReplacement = processVariables(rule.replacement);
+            // 处理光标位置
+            const cursorPos = processedReplacement.indexOf("$|$");
+            let newText =
+              beforeTrigger + processedReplacement.replace("$|$", "");
+
+            // 记录这次替换的信息，用于可能的还原
+            setLastExpansion({
+              originalText: text,
+              replacedText: newText,
+              triggerLength: rule.trigger.length,
+            });
+
+            setUserInput(newText);
+
+            // 设置光标位置
+            if (cursorPos >= 0) {
+              setTimeout(() => {
+                if (inputRef.current) {
+                  const targetPos = beforeTrigger.length + cursorPos;
+                  inputRef.current.setSelectionRange(targetPos, targetPos);
+                  inputRef.current.focus();
+                }
+              }, 0);
+            }
+
+            shouldProcessNormally = false;
+            break;
+          }
+        }
+      }
     }
 
-    // clear search results
-    if (n === 0) {
-      setPromptHints([]);
-    } else if (text.match(ChatCommandPrefix)) {
-      setPromptHints(chatCommands.search(text));
-    } else if (!config.disablePromptHint && n < SEARCH_TEXT_LIMIT) {
-      // check if need to trigger auto completion
-      if (text.match(MaskCommandPrefix)) {
-        let searchText = text.slice(1);
-        onSearch(searchText);
+    // 3. 处理常规输入
+    if (shouldProcessNormally) {
+      // 当用户输入任何新内容并且不是删除操作时，重置上次替换记录
+      if (lastExpansion && lastExpansion.replacedText !== text) {
+        setLastExpansion(null);
+      }
+
+      setUserInput(text);
+      const n = text.trim().length;
+
+      // const atMatch = text.match(/^@([\w-]*)$/); // 完整匹配 @ 后面任意单词或短线
+      const atMatch = text.match(/^@(\S*)$/); // 完整匹配 @ 后面非空字符
+      if (!isMobileScreen && atMatch) {
+        setModelAtQuery(atMatch[1]);
+        setShowModelAtSelector(true);
+        setModelAtSelectIndex(0);
+      } else {
+        setShowModelAtSelector(false);
+      }
+
+      // clear search results
+      if (n === 0) {
+        setPromptHints([]);
+      } else if (text.match(ChatCommandPrefix)) {
+        const searchResults = chatCommands.search(text);
+        setPromptHints(searchResults);
+        // 如果搜索结果为空，确保清除候选列表
+        if (searchResults.length === 0) {
+          setPromptHints([]);
+        }
+      } else if (!config.disablePromptHint && n < SEARCH_TEXT_LIMIT) {
+        // check if need to trigger auto completion
+        if (text.match(MaskCommandPrefix)) {
+          let searchText = text.slice(1);
+          onSearch(searchText);
+        } else {
+          // 如果不匹配任何前缀，也清除候选列表
+          setPromptHints([]);
+        }
+      } else {
+        setPromptHints([]);
       }
     }
   };
@@ -3641,186 +3737,186 @@ export function Chat() {
     }
   }, [session.messages[session.messages.length - 1]?.id]);
 
-  // update session model
-  useEffect(() => {
-    if (!modelTable || modelTable.length === 0) return;
-    console.log("modelTable changed, updating session model...");
+  // // update session model
+  // useEffect(() => {
+  //   if (!modelTable || modelTable.length === 0) return;
+  //   console.log("modelTable changed, updating session model...");
 
-    const storedConfigs = getStoredModelConfigs();
-    const modelConfig = { ...session.mask.modelConfig };
-    if (!storedConfigs.chatModel) {
-      saveModelConfig("chatModel", access.defaultModel);
-      const [modelName, providerName] =
-        access.defaultModel.split(/@(?=[^@]*$)/);
-      modelConfig.model = modelName;
-      modelConfig.providerName = providerName as ServiceProvider;
-      console.log("chatModel not set, using default", modelName, providerName);
-    }
-    if (!storedConfigs.compressModel) {
-      saveModelConfig("compressModel", access.compressModel);
-      const [modelName, providerName] =
-        access.compressModel.split(/@(?=[^@]*$)/);
-      modelConfig.compressModel = modelName;
-      modelConfig.compressProviderName = providerName as ServiceProvider;
-      console.log(
-        "compressModel not set, using default",
-        modelName,
-        providerName,
-      );
-    }
-    if (!storedConfigs.ocrModel) {
-      saveModelConfig("ocrModel", access.ocrModel);
-      const [modelName, providerName] = access.ocrModel.split(/@(?=[^@]*$)/);
-      modelConfig.ocrModel = modelName;
-      modelConfig.ocrProviderName = providerName as ServiceProvider;
-      console.log("ocrModel not set, using default", modelName, providerName);
-    }
-    if (!storedConfigs.textProcessModel) {
-      saveModelConfig("textProcessModel", access.textProcessModel);
-      const [modelName, providerName] =
-        access.textProcessModel.split(/@(?=[^@]*$)/);
-      modelConfig.textProcessModel = modelName;
-      modelConfig.textProcessProviderName = providerName as ServiceProvider;
-      console.log(
-        "textProcessModel not set, using default",
-        modelName,
-        providerName,
-      );
-    }
-    chatStore.updateTargetSession(
-      session,
-      (session) => (session.mask.modelConfig = modelConfig),
-    );
-    // 获取当前所有任务的模型配置
-    const currentConfig = {
-      chat: {
-        model: modelConfig.model || access.defaultModel,
-        providerName: modelConfig.providerName,
-      },
-      textProcess: {
-        model: modelConfig.textProcessModel || access.textProcessModel,
-        providerName: modelConfig.textProcessProviderName,
-      },
-      ocr: {
-        model: modelConfig.ocrModel || access.ocrModel,
-        providerName: modelConfig.ocrProviderName,
-      },
-      compress: {
-        model: modelConfig.compressModel || access.compressModel,
-        providerName: modelConfig.compressProviderName,
-      },
-    };
-    chatStore.updateTargetSession(
-      session,
-      (session) => (session.mask.modelConfig = modelConfig),
-    );
-    /**
-     * 获取任务模型 - 优先级：
-     * 1. 同名且 providerName 一致的模型
-     * 2. 同名的模型（任意提供商）
-     * 3. 首个可用模型
-     */
-    const getTaskModel = (model: string, providerName: string) => {
-      // 如果当前未设置模型名称，直接返回首个模型
-      if (!model) {
-        return modelTable.length > 0
-          ? {
-              model: modelTable[0].name,
-              providerName: modelTable[0].provider?.providerName,
-            }
-          : null;
-      }
+  //   const storedConfigs = getStoredModelConfigs();
+  //   const modelConfig = { ...session.mask.modelConfig };
+  //   if (!storedConfigs.chatModel) {
+  //     saveModelConfig("chatModel", access.defaultModel);
+  //     const [modelName, providerName] =
+  //       access.defaultModel.split(/@(?=[^@]*$)/);
+  //     modelConfig.model = modelName;
+  //     modelConfig.providerName = providerName as ServiceProvider;
+  //     console.log("chatModel not set, using default", modelName, providerName);
+  //   }
+  //   if (!storedConfigs.compressModel) {
+  //     saveModelConfig("compressModel", access.compressModel);
+  //     const [modelName, providerName] =
+  //       access.compressModel.split(/@(?=[^@]*$)/);
+  //     modelConfig.compressModel = modelName;
+  //     modelConfig.compressProviderName = providerName as ServiceProvider;
+  //     console.log(
+  //       "compressModel not set, using default",
+  //       modelName,
+  //       providerName,
+  //     );
+  //   }
+  //   if (!storedConfigs.ocrModel) {
+  //     saveModelConfig("ocrModel", access.ocrModel);
+  //     const [modelName, providerName] = access.ocrModel.split(/@(?=[^@]*$)/);
+  //     modelConfig.ocrModel = modelName;
+  //     modelConfig.ocrProviderName = providerName as ServiceProvider;
+  //     console.log("ocrModel not set, using default", modelName, providerName);
+  //   }
+  //   if (!storedConfigs.textProcessModel) {
+  //     saveModelConfig("textProcessModel", access.textProcessModel);
+  //     const [modelName, providerName] =
+  //       access.textProcessModel.split(/@(?=[^@]*$)/);
+  //     modelConfig.textProcessModel = modelName;
+  //     modelConfig.textProcessProviderName = providerName as ServiceProvider;
+  //     console.log(
+  //       "textProcessModel not set, using default",
+  //       modelName,
+  //       providerName,
+  //     );
+  //   }
+  //   chatStore.updateTargetSession(
+  //     session,
+  //     (session) => (session.mask.modelConfig = modelConfig),
+  //   );
+  //   // 获取当前所有任务的模型配置
+  //   const currentConfig = {
+  //     chat: {
+  //       model: modelConfig.model || access.defaultModel,
+  //       providerName: modelConfig.providerName,
+  //     },
+  //     textProcess: {
+  //       model: modelConfig.textProcessModel || access.textProcessModel,
+  //       providerName: modelConfig.textProcessProviderName,
+  //     },
+  //     ocr: {
+  //       model: modelConfig.ocrModel || access.ocrModel,
+  //       providerName: modelConfig.ocrProviderName,
+  //     },
+  //     compress: {
+  //       model: modelConfig.compressModel || access.compressModel,
+  //       providerName: modelConfig.compressProviderName,
+  //     },
+  //   };
+  //   chatStore.updateTargetSession(
+  //     session,
+  //     (session) => (session.mask.modelConfig = modelConfig),
+  //   );
+  //   /**
+  //    * 获取任务模型 - 优先级：
+  //    * 1. 同名且 providerName 一致的模型
+  //    * 2. 同名的模型（任意提供商）
+  //    * 3. 首个可用模型
+  //    */
+  //   const getTaskModel = (model: string, providerName: string) => {
+  //     // 如果当前未设置模型名称，直接返回首个模型
+  //     if (!model) {
+  //       return modelTable.length > 0
+  //         ? {
+  //             model: modelTable[0].name,
+  //             providerName: modelTable[0].provider?.providerName,
+  //           }
+  //         : null;
+  //     }
 
-      let sameNameModel = null;
-      let firstAvailable = null;
+  //     let sameNameModel = null;
+  //     let firstAvailable = null;
 
-      for (const item of modelTable) {
-        // 【优先级 1】完全匹配（名称和提供商均一致）
-        if (
-          item.name === model &&
-          item.provider?.providerName === providerName
-        ) {
-          return null; // 直接返回无需修改
-        }
+  //     for (const item of modelTable) {
+  //       // 【优先级 1】完全匹配（名称和提供商均一致）
+  //       if (
+  //         item.name === model &&
+  //         item.provider?.providerName === providerName
+  //       ) {
+  //         return null; // 直接返回无需修改
+  //       }
 
-        // 【优先级 2】记录第一个同名模型（只要名称匹配）
-        if (item.name === model && !sameNameModel) {
-          sameNameModel = item;
-        }
+  //       // 【优先级 2】记录第一个同名模型（只要名称匹配）
+  //       if (item.name === model && !sameNameModel) {
+  //         sameNameModel = item;
+  //       }
 
-        // 【优先级 3】记录首个可用模型（数组中第一个非空项）
-        if (!firstAvailable) {
-          firstAvailable = item;
-        }
-      }
+  //       // 【优先级 3】记录首个可用模型（数组中第一个非空项）
+  //       if (!firstAvailable) {
+  //         firstAvailable = item;
+  //       }
+  //     }
 
-      // 根据候选结果返回
-      if (sameNameModel) {
-        return {
-          model: sameNameModel.name,
-          providerName: sameNameModel.provider?.providerName,
-        };
-      }
+  //     // 根据候选结果返回
+  //     if (sameNameModel) {
+  //       return {
+  //         model: sameNameModel.name,
+  //         providerName: sameNameModel.provider?.providerName,
+  //       };
+  //     }
 
-      return firstAvailable
-        ? {
-            model: firstAvailable.name,
-            providerName: firstAvailable.provider?.providerName,
-          }
-        : null;
-    };
+  //     return firstAvailable
+  //       ? {
+  //           model: firstAvailable.name,
+  //           providerName: firstAvailable.provider?.providerName,
+  //         }
+  //       : null;
+  //   };
 
-    // 检查并更新每个任务的模型
-    Object.entries(currentConfig).forEach(([taskType, config]) => {
-      // 获取该任务可能的替代模型
-      const replacementModel = getTaskModel(config.model, config.providerName);
-      // 如果需要替换
-      if (replacementModel) {
-        console.log("update model for task", taskType, replacementModel);
-        switch (taskType) {
-          case "chat":
-            session.mask.modelConfig.model = replacementModel.model;
-            session.mask.modelConfig.providerName =
-              replacementModel.providerName as ServiceProvider;
-            saveModelConfig(
-              "chatModel",
-              `${replacementModel.model}@${replacementModel.providerName}`,
-            );
-            break;
-          case "textProcess":
-            session.mask.modelConfig.textProcessModel = replacementModel.model;
-            session.mask.modelConfig.textProcessProviderName =
-              replacementModel.providerName as ServiceProvider;
-            saveModelConfig(
-              "textProcessModel",
-              `${replacementModel.model}@${replacementModel.providerName}`,
-            );
-            break;
-          case "ocr":
-            session.mask.modelConfig.ocrModel = replacementModel.model;
-            session.mask.modelConfig.ocrProviderName =
-              replacementModel.providerName as ServiceProvider;
-            saveModelConfig(
-              "ocrModel",
-              `${replacementModel.model}@${replacementModel.providerName}`,
-            );
-            break;
-          case "compress":
-            session.mask.modelConfig.compressModel = replacementModel.model;
-            session.mask.modelConfig.compressProviderName =
-              replacementModel.providerName as ServiceProvider;
-            saveModelConfig(
-              "compressModel",
-              `${replacementModel.model}@${replacementModel.providerName}`,
-            );
-            break;
-          default:
-            // 非 chat 类型的任务暂不做处理
-            break;
-        }
-      }
-    });
-  }, [modelTable]);
+  //   // 检查并更新每个任务的模型
+  //   Object.entries(currentConfig).forEach(([taskType, config]) => {
+  //     // 获取该任务可能的替代模型
+  //     const replacementModel = getTaskModel(config.model, config.providerName);
+  //     // 如果需要替换
+  //     if (replacementModel) {
+  //       console.log("update model for task", taskType, replacementModel);
+  //       switch (taskType) {
+  //         case "chat":
+  //           session.mask.modelConfig.model = replacementModel.model;
+  //           session.mask.modelConfig.providerName =
+  //             replacementModel.providerName as ServiceProvider;
+  //           saveModelConfig(
+  //             "chatModel",
+  //             `${replacementModel.model}@${replacementModel.providerName}`,
+  //           );
+  //           break;
+  //         case "textProcess":
+  //           session.mask.modelConfig.textProcessModel = replacementModel.model;
+  //           session.mask.modelConfig.textProcessProviderName =
+  //             replacementModel.providerName as ServiceProvider;
+  //           saveModelConfig(
+  //             "textProcessModel",
+  //             `${replacementModel.model}@${replacementModel.providerName}`,
+  //           );
+  //           break;
+  //         case "ocr":
+  //           session.mask.modelConfig.ocrModel = replacementModel.model;
+  //           session.mask.modelConfig.ocrProviderName =
+  //             replacementModel.providerName as ServiceProvider;
+  //           saveModelConfig(
+  //             "ocrModel",
+  //             `${replacementModel.model}@${replacementModel.providerName}`,
+  //           );
+  //           break;
+  //         case "compress":
+  //           session.mask.modelConfig.compressModel = replacementModel.model;
+  //           session.mask.modelConfig.compressProviderName =
+  //             replacementModel.providerName as ServiceProvider;
+  //           saveModelConfig(
+  //             "compressModel",
+  //             `${replacementModel.model}@${replacementModel.providerName}`,
+  //           );
+  //           break;
+  //         default:
+  //           // 非 chat 类型的任务暂不做处理
+  //           break;
+  //       }
+  //     }
+  //   });
+  // }, [modelTable]);
   return (
     <ChatComponent key={session.id} modelTable={modelTable}></ChatComponent>
   );

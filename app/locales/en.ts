@@ -379,6 +379,9 @@ const en: LocaleType = {
       NotSyncYet: "Not sync yet",
       Success: "Sync Success",
       Fail: "Sync Fail",
+      Fetching: "Fetching CloudState ...",
+      Merging: "Merging LocalState",
+      Uploading: "Uploading CloudState...",
 
       Config: {
         Modal: {
@@ -566,7 +569,27 @@ const en: LocaleType = {
         },
       },
     },
-
+    Expansion: {
+      Title: "Text Expansion",
+      SubTitle: "Auto-replace text during input",
+      Manage: "Manage Rules",
+      Rules: "Expansion Rules Management",
+      AddRule: "Add New Rule",
+      AddRuleHint: "Create a new text replacement rule",
+      EditRule: "Edit Rule",
+      Trigger: "Trigger Text",
+      Replacement: "Replacement",
+      ReplacementHint: "Use $|$ to mark cursor position",
+      Description: "Description",
+      Enabled: "Enabled",
+      BuiltinRules: "Built-in Rules",
+      UserRules: "User Rules",
+      NoUserRules: "No user-defined rules yet",
+      EnabledTitle: "Enable Text Expansion",
+      EnabledSubTitle: "Toggle automatic text replacement",
+      SelectAll: "Select All",
+      UnselectAll: "Unselect All",
+    },
     ModelSettings: {
       Title: "Model Settings",
       SubTitle: "Click to expand model settings",
@@ -626,6 +649,15 @@ const en: LocaleType = {
         name: "Reason Effort",
         tip: "Modified model inference effort program, currently only grok",
       },
+    },
+    EnableStream: {
+      Title: "Enable Stream",
+      SubTitle:
+        "Non-streaming output will return all content in the final request.",
+    },
+    RequestTimeout: {
+      Title: "Request Timeout",
+      SubTitle: "Request timeout duration in seconds",
     },
     Temperature: {
       Title: "Temperature",

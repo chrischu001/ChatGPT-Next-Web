@@ -365,10 +365,13 @@ const cn = {
       NotSyncYet: "还没有进行过同步",
       Success: "同步成功",
       Fail: "同步失败",
+      Fetching: "正在获取云端数据...",
+      Merging: "合并本地数据",
+      Uploading: "正在上传云端...",
 
       Config: {
         Modal: {
-          Title: "配置云同步",
+          Title: "配置云同步(检查可用性有bug，可尝试直接同步)",
           Check: "检查可用性",
         },
         SyncType: {
@@ -548,7 +551,27 @@ const cn = {
         SubTitle: "增加自定义模型可选项，使用英文逗号隔开",
       },
     },
-
+    Expansion: {
+      Title: "快捷输入",
+      SubTitle: "输入时自动替换文本的扩展规则",
+      Manage: "管理规则",
+      Rules: "扩展规则管理",
+      AddRule: "添加新规则",
+      AddRuleHint: "创建一个新的文本替换规则",
+      EditRule: "编辑规则",
+      Trigger: "触发文本",
+      Replacement: "替换内容",
+      ReplacementHint: "使用 $|$ 标记光标位置",
+      Description: "描述",
+      Enabled: "启用",
+      BuiltinRules: "内置规则",
+      UserRules: "用户规则",
+      NoUserRules: "暂无用户自定义规则",
+      EnabledTitle: "启用快捷输入",
+      EnabledSubTitle: "是否启用自动文本替换功能",
+      SelectAll: "全选",
+      UnselectAll: "取消全选",
+    },
     ModelSettings: {
       Title: "模型设置",
       SubTitle: "点击展开对话模型设置",
@@ -599,6 +622,14 @@ const cn = {
         name: "推理努力",
         tip: "修改模型推理努力程序，当前仅grok适用",
       },
+    },
+    EnableStream: {
+      Title: "是否流式输出",
+      SubTitle: "是否使用流式输出，非流式输出会在最后一次请求时返回所有内容",
+    },
+    RequestTimeout: {
+      Title: "请求超时",
+      SubTitle: "请求超时的时间，单位为秒",
     },
     Temperature: {
       Title: "随机性 (temperature)",
@@ -766,8 +797,8 @@ const cn = {
     ConfirmNoShow: "确认禁用？禁用后可以随时在设置中重新启用。",
     Title: "挑选一个面具",
     SubTitle: "现在开始，与面具背后的灵魂思维碰撞",
-    More: "展开代码",
-    Less: "折叠代码",
+    More: "展开",
+    Less: "折叠",
     Searching: "搜索中...",
     Search: "搜索内容",
     NoSearch: "没有搜索内容",

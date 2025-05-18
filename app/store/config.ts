@@ -56,6 +56,7 @@ export const DEFAULT_CONFIG = {
   disablePromptHint: false,
   enableShowUserContinuePrompt: false,
   customUserContinuePrompt: "",
+  enableTextExpansion: true,
 
   dontShowMaskSplashScreen: true, // dont show splash screen when create chat
   hideBuiltinMasks: false, // dont add builtin masks
@@ -66,6 +67,8 @@ export const DEFAULT_CONFIG = {
   modelConfig: {
     model: "" as ModelType,
     providerName: "OpenAI" as ServiceProvider,
+    enableStream: true,
+    requestTimeout: 300,
     temperature: 0.5,
     temperature_enabled: true,
     top_p: 0.99,
