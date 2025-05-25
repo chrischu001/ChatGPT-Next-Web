@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { IconButton } from "./button";
 import styles from "./custom-provider.module.scss";
 import { useAccessStore } from "../store";
@@ -199,6 +199,7 @@ export interface ProviderModalProps {
   // saveProvidersToStorage: (providers: userCustomProvider[]) => void;
 }
 
+export const API_CONCURRENCY_LIMIT = 10;
 // 提供商编辑模态框
 export function ProviderModal(props: ProviderModalProps) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -553,7 +554,7 @@ export function ProviderModal(props: ProviderModalProps) {
 
     // 支持逗号和换行符分割多个模型名称
     const modelNames = searchModel
-      .split(/[,，\n]/)
+      .split(/[,，\s\n]/)
       .map((name) => name.trim())
       .filter(Boolean);
 
@@ -624,7 +625,7 @@ export function ProviderModal(props: ProviderModalProps) {
     setEditingModel(null);
   };
   // 生成显示名称映射JSON字符串的函数
-  const generateDisplayNameMapView = () => {
+  const generateDisplayNameMapView = useCallback(() => {
     const displayNameMap: Record<string, string> = {};
     models.forEach((model) => {
       if (model.displayName && model.displayName !== model.name) {
@@ -633,7 +634,8 @@ export function ProviderModal(props: ProviderModalProps) {
     });
 
     return JSON.stringify(displayNameMap, null, 2);
-  };
+  }, [models]);
+
   // 解析并应用显示名称映射的函数
   const applyDisplayNameMap = () => {
     try {
@@ -684,7 +686,7 @@ export function ProviderModal(props: ProviderModalProps) {
     if (isJsonViewMode) {
       setDisplayNameMapText(generateDisplayNameMapView());
     }
-  }, [isJsonViewMode]);
+  }, [isJsonViewMode, generateDisplayNameMapView]);
 
   // 切换模型选中状态
   const toggleModelSelection = (modelName: string) => {
@@ -861,12 +863,15 @@ export function ProviderModal(props: ProviderModalProps) {
   useEffect(() => {
     // This will run when formData.type changes
     // if (!formData.testModel) {
-    const defaultTestModel =
-      providerTypeDefaultTestModel[formData.type] || "gpt-4o-mini";
-    setFormData((prev) => ({
-      ...prev,
-      testModel: defaultTestModel,
-    }));
+    if (!props.provider) {
+      // 仅在添加新 Provider 时，根据 type 设置默认 testModel
+      const defaultTestModel =
+        providerTypeDefaultTestModel[formData.type] || "gpt-4o-mini";
+      setFormData((prev) => ({
+        ...prev,
+        testModel: defaultTestModel,
+      }));
+    }
     // }
   }, [formData.type]);
 
@@ -929,7 +934,7 @@ export function ProviderModal(props: ProviderModalProps) {
         result = {
           ...result,
           success: false,
-          message: "✗ Error",
+          message: `✗ Error (${response.status})`,
           fullError: fullError,
         };
       }
@@ -965,10 +970,20 @@ export function ProviderModal(props: ProviderModalProps) {
       );
       return;
     }
-    for (const key of keyList) {
-      await testKeyConnectivity(key);
+    let testedCount = 0;
+    const totalKeys = keyList.length;
+    for (let i = 0; i < totalKeys; i += API_CONCURRENCY_LIMIT) {
+      const batch = keyList.slice(i, i + API_CONCURRENCY_LIMIT);
+      showToast(
+        `Testing keys ${i + 1}-${Math.min(
+          i + API_CONCURRENCY_LIMIT,
+          totalKeys,
+        )} of ${totalKeys}...`,
+      );
+      await Promise.all(batch.map((key) => testKeyConnectivity(key)));
+      testedCount += batch.length;
     }
-    showToast("All keys tested");
+    showToast(`All ${totalKeys} keys tested.`);
   };
 
   const removeInvalidKeys = async () => {
@@ -1125,8 +1140,8 @@ export function ProviderModal(props: ProviderModalProps) {
       };
 
       // Process with a reasonable batch size (adjust as needed)
-      const BATCH_SIZE = 10; // Test 10 keys at a time
-      await processBatch(untestedKeys, BATCH_SIZE);
+      // const BATCH_SIZE = 10; // Test 10 keys at a time
+      await processBatch(untestedKeys, API_CONCURRENCY_LIMIT);
     }
 
     // Use our local results collection for filtering
@@ -1160,6 +1175,83 @@ export function ProviderModal(props: ProviderModalProps) {
     }
   };
 
+  // 使用 useMemo 缓存过滤后的键列表，并优化空输入情况
+  const filteredKeys = useMemo(() => {
+    // 如果搜索输入为空，直接返回所有键，避免不必要的遍历
+    if (!newKey.trim()) {
+      return keyList;
+    }
+    // 只有当有搜索条件时才执行过滤
+    const lowerSearchTerm = newKey.toLowerCase();
+    return keyList.filter((key) => {
+      const lowerKey = key.toLowerCase();
+
+      // 匹配键本身
+      if (lowerKey.includes(lowerSearchTerm)) return true;
+
+      // 匹配测试结果
+      const testResult = testResults[key];
+      if (testResult) {
+        const resultText = `${testResult.message} ${
+          testResult.fullError || ""
+        }`.toLowerCase();
+        if (resultText.includes(lowerSearchTerm)) return true;
+      }
+
+      return false;
+    });
+  }, [keyList, newKey, testResults]);
+
+  // 添加批量删除过滤后密钥的函数
+  const removeFilteredKeys = async () => {
+    // 如果没有过滤条件或没有匹配项，不执行任何操作
+    if (!newKey.trim() || filteredKeys.length === 0) return;
+
+    // 构建确认对话框内容
+    const confirmContent = (
+      <div>
+        <div>
+          {`确定要删除所有匹配"${newKey}"的 ${filteredKeys.length} 个密钥吗？`}
+        </div>
+        <div
+          style={{
+            marginTop: "10px",
+            padding: "8px 12px",
+            backgroundColor: "#fff1f0",
+            borderRadius: "4px",
+            borderLeft: "3px solid #ff4d4f",
+          }}
+        >
+          <div style={{ fontWeight: "500", color: "#cf1322" }}>
+            此操作不可撤销
+          </div>
+          <div style={{ marginTop: "4px", color: "#ff4d4f" }}>
+            {filteredKeys.length > 3
+              ? `将删除 ${filteredKeys.length} 个密钥，包括: ${filteredKeys
+                  .slice(0, 3)
+                  .join(", ")}... 等`
+              : `将删除: ${filteredKeys.join(", ")}`}
+          </div>
+        </div>
+      </div>
+    );
+
+    // 显示确认对话框
+    if (await showConfirm(confirmContent)) {
+      // 用户确认后，创建一个新的密钥列表，排除所有匹配的密钥
+      const remainingKeys = keyList.filter(
+        (key) => !filteredKeys.includes(key),
+      );
+      setKeyList(remainingKeys);
+
+      // 清空搜索输入
+      setNewKey("");
+
+      // 显示成功消息
+      showToast(`已删除 ${filteredKeys.length} 个密钥`);
+    }
+  };
+
   const renderApiKeysSection = () => {
     if (isKeyListViewMode) {
       return (
@@ -1173,9 +1265,6 @@ export function ProviderModal(props: ProviderModalProps) {
               onChange={(e) => {
                 handleChange("testModel", e.target.value);
               }}
-              // placeholder={
-              //   providerTypeDefaultTestModel[formData.type] || "gpt-4o-mini"
-              // }
               className={styles.testModelInput}
             />
             <IconButton
@@ -1211,25 +1300,50 @@ export function ProviderModal(props: ProviderModalProps) {
                 bordered
               />
               <IconButton
+                text={Locale.CustomProvider.ClearSelectKeys}
+                onClick={removeFilteredKeys}
+                bordered
+                title="删除所有匹配的密钥"
+                disabled={!newKey.trim() || filteredKeys.length === 0}
+                className={styles.deleteMatchedButton}
+              />
+              <IconButton
                 text={Locale.CustomProvider.RefreshBalance}
                 onClick={async () => {
                   if (formData.baseUrl.endsWith("#")) {
                     showToast("当前渠道不支持余额查询");
                     return;
-                  } else {
-                    setKeyBalances({});
-                    // 刷新所有Key的余额
-                    const loadingState: Record<string, boolean> = {};
-                    keyList.forEach((key) => {
-                      loadingState[key] = true;
-                    });
-                    setLoadingKeyBalances(loadingState);
-                    let totalBalance = 0;
-                    let currency = "";
-                    let hasValidBalance = false;
+                  }
+                  setKeyBalances({});
+                  const loadingState: Record<string, boolean> = {};
+                  keyList.forEach((key) => {
+                    loadingState[key] = true;
+                  });
+                  setLoadingKeyBalances(loadingState);
 
-                    // 并行查询所有key的余额
-                    const promises = keyList.map(async (key) => {
+                  let totalBalance = 0;
+                  let currency = "";
+                  let hasValidBalanceOverall = false;
+                  let processedCount = 0;
+                  const totalKeysToRefresh = keyList.length;
+
+                  for (
+                    let i = 0;
+                    i < totalKeysToRefresh;
+                    i += API_CONCURRENCY_LIMIT
+                  ) {
+                    const batchKeys = keyList.slice(
+                      i,
+                      i + API_CONCURRENCY_LIMIT,
+                    );
+                    showToast(
+                      `Refreshing balances for keys ${i + 1}-${Math.min(
+                        i + API_CONCURRENCY_LIMIT,
+                        totalKeysToRefresh,
+                      )} of ${totalKeysToRefresh}...`,
+                    );
+
+                    const batchPromises = batchKeys.map(async (key) => {
                       try {
                         let result: any = null;
                         if (formData.type === "openrouter") {
@@ -1254,13 +1368,14 @@ export function ProviderModal(props: ProviderModalProps) {
                             .checkCustomOpenaiBalance(key, formData.baseUrl);
                         }
 
-                        // 更新该key的余额信息
                         if (result && result.isValid && result.totalBalance) {
                           const balance = Number(result.totalBalance);
                           if (!isNaN(balance)) {
-                            totalBalance += balance;
-                            currency = result.currency || currency;
-                            hasValidBalance = true;
+                            totalBalance += balance; // Accumulate total balance
+                            if (!currency && result.currency) {
+                              currency = result.currency; // Set currency from the first valid result
+                            }
+                            hasValidBalanceOverall = true;
                           }
                           setKeyBalances((prev) => ({
                             ...prev,
@@ -1269,18 +1384,11 @@ export function ProviderModal(props: ProviderModalProps) {
                             ).toFixed(2)}`,
                           }));
                         } else {
-                          setKeyBalances((prev) => ({
-                            ...prev,
-                            [key]: null,
-                          }));
+                          setKeyBalances((prev) => ({ ...prev, [key]: null }));
                         }
                       } catch (error) {
-                        setKeyBalances((prev) => ({
-                          ...prev,
-                          [key]: null,
-                        }));
+                        setKeyBalances((prev) => ({ ...prev, [key]: null }));
                       } finally {
-                        // 标记该key加载完成
                         setLoadingKeyBalances((prev) => ({
                           ...prev,
                           [key]: false,
@@ -1288,29 +1396,27 @@ export function ProviderModal(props: ProviderModalProps) {
                       }
                     });
 
-                    await Promise.all(promises);
-                    // 更新渠道总余额
-                    if (hasValidBalance) {
-                      setFormData((prev) => ({
-                        ...prev,
-                        balance: {
-                          amount: totalBalance,
-                          currency: currency,
-                          lastUpdated: new Date().toISOString(),
-                        },
-                      }));
-                    } else {
-                      // 如果没有有效的余额，清除总余额
-                      setFormData((prev) => ({
-                        ...prev,
-                        balance: undefined,
-                      }));
-                    }
+                    await Promise.all(batchPromises);
+                    processedCount += batchKeys.length;
+                  }
+
+                  if (hasValidBalanceOverall) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      balance: {
+                        amount: totalBalance,
+                        currency: currency,
+                        lastUpdated: new Date().toISOString(),
+                      },
+                    }));
                     showToast(
                       `所有余额刷新完成，当前渠道总额度：${currency} ${totalBalance.toFixed(
                         2,
                       )}`,
                     );
+                  } else {
+                    setFormData((prev) => ({ ...prev, balance: undefined }));
+                    showToast("所有余额刷新完成，未查询到有效额度信息。");
                   }
                 }}
                 bordered
@@ -1324,17 +1430,19 @@ export function ProviderModal(props: ProviderModalProps) {
           </div>
 
           <div className={styles.keyListScroll}>
-            {keyList.length === 0 ? (
+            {filteredKeys.length === 0 ? (
               <div className={styles.emptyKeys}>
-                No API keys added. Add your first key above.
+                {keyList.length === 0
+                  ? "No API keys added. Add your first key above."
+                  : `No keys matching "${newKey}"`}
               </div>
             ) : (
               <div className={styles.keyList}>
-                {keyList.map((key, index) => (
+                {filteredKeys.map((key, index) => (
                   <KeyItem
                     key={index}
                     onDelete={removeKeyFromList}
-                    index={index}
+                    index={keyList.indexOf(key)}
                     apiKey={key}
                     baseUrl={formData.baseUrl}
                     type={formData.type}

@@ -917,7 +917,7 @@ const en: LocaleType = {
     ApiKeyRequired: "API key is required",
     ApiConfigRequired: "Please fill in API Key and API URL first",
     ModelNameRequired: "Please fill in Model Name first",
-    SearchModel: "Search models...",
+    SearchModel: "Search or add models...",
     Select: {
       All: "Select All",
       Clear: "Clear",
@@ -952,6 +952,7 @@ const en: LocaleType = {
     NormalView: "Normal View",
     AddKey: "Add Key",
     ClearInput: "Clear Input",
+    ClearSelectKeys: "Clear Selected Key",
     RefreshBalance: "Refresh Balance",
     RemoveInvalidKey: "Remove Invalid Key",
     NoKeysAdded: "No API Keys Added Yet",
