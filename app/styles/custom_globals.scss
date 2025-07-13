@@ -79,7 +79,7 @@
 html {
   height: var(--full-height);
 
-  font-family: "Noto Sans", "SF Pro SC", "SF Pro Text", "SF Pro Icons",
+  font-family:  "Cascadia Code", "Consolas", "Noto Sans", "Microsoft YaHei", "SF Pro SC", "SF Pro Text", "SF Pro Icons",
     "PingFang SC", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
 }
 
@@ -282,7 +282,7 @@ div.math {
   background-color: var(--white);
   border: var(--border-in-light);
   border-radius: 8px;
-  font-size: 16px;
+  font-size: var(--text-base);
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -298,7 +298,7 @@ div.math {
   }
 }
 .link {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--primary);
   text-decoration: none;
 
@@ -325,7 +325,7 @@ pre {
     &:after {
       content: "📋复制" !important;
       color: white !important;
-      font-size: 12px !important;
+      font-size: var(--text-xs) !important;
     }
 
     &:hover {
@@ -356,7 +356,7 @@ pre {
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       border: none;
       cursor: pointer;
-      font-size: 12px;
+      font-size: var(--text-xs);
       transition: all 0.2s ease;
       opacity: 0.7;
 
@@ -393,9 +393,9 @@ pre {
 /* 提示文字的样式 */
 .button-description {
   color: #07725e; /* 白色文字 */
-  font-size: 16px; /* 字体大小 */
+  font-size: var(--text-base); /* 字体大小 */
   font-weight: 600; /* 字体粗细 */
-  font-family: 'Arial', sans-serif; /* 字体类型 */
+  font-family: inherit; //'Arial', sans-serif; /* 字体类型 */
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); /* 文字阴影提高可读性 */
   white-space: nowrap; /* 防止文字换行 */
   transition: color 0.1s ease, transform 0.1s ease; /* 过渡效果 */
