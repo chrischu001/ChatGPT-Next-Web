@@ -355,8 +355,9 @@ const cn = {
     },
     Avatar: "头像",
     FontSize: {
-      Title: "字体大小",
-      SubTitle: "聊天内容的字体大小",
+      Title: "本程序应用的字体基准",
+      SubTitle:
+        "整体程序风格的字体基准（1em）, 参考聊天标题的字体大小，如自定义css中有设置则以自定义css为准",
     },
     InjectSystemPrompts: {
       Title: "注入系统级提示信息",
@@ -375,6 +376,15 @@ const cn = {
       IsChecking: "正在检查更新...",
       FoundUpdate: (x: string) => `发现新版本：${x}`,
       GoToUpdate: "前往更新",
+    },
+    CustomCSS: {
+      Title: "自定义CSS",
+      SubTitleEnabled: "自定义CSS样式已启用",
+      SubTitleDisabled: "自定义CSS样式已禁用",
+      Edit: "编辑CSS",
+      Enable: "启用自定义CSS",
+      More: "获取更多主题",
+      Hint: "您可以自定义全局CSS样式，例如修改主题色，设置AI消息框最大宽度等，完整的变量列表可参考应用的globals.scss文件。",
     },
     Personalization: {
       Title: "个性化设置",
@@ -565,7 +575,7 @@ const cn = {
         ApiKey: {
           Title: "API 密钥",
           SubTitle: "从 Google AI 获取您的 API 密钥",
-          Placeholder: "输入您的 Google AI Studio API 密钥",
+          Placeholder: "Google AI Studio API",
         },
 
         Endpoint: {

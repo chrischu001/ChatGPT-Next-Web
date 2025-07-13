@@ -374,8 +374,9 @@ const en: LocaleType = {
     },
     Avatar: "Avatar",
     FontSize: {
-      Title: "Font Size",
-      SubTitle: "Adjust font size of chat content",
+      Title: "Base Font Size",
+      SubTitle:
+        "Adjust base font size (1em) of app, which referenced in the chat title",
     },
     InjectSystemPrompts: {
       Title: "Inject System Prompts",
@@ -393,6 +394,15 @@ const en: LocaleType = {
       IsChecking: "Checking update...",
       FoundUpdate: (x: string) => `Found new version: ${x}`,
       GoToUpdate: "Update",
+    },
+    CustomCSS: {
+      Title: "Custom CSS",
+      SubTitleEnabled: "Custom CSS styles are enabled",
+      SubTitleDisabled: "Custom CSS styles are disabled",
+      Edit: "Edit CSS",
+      Enable: "Enable Custom CSS",
+      More: "Get More Themes",
+      Hint: "You can customize global CSS styles, such as modifying theme colors, setting the max width of AI message boxes, etc. For the complete list of variables, please refer to the app's globals.scss file.",
     },
     Personalization: {
       Title: "Personalization Settings",

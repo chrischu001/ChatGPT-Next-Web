@@ -56,12 +56,12 @@
         max-width: calc(100% - 100px);
 
         .user-prompt-title {
-          font-size: 14px;
+          font-size: var(--text-sm);
           line-height: 2;
           font-weight: bold;
         }
         .user-prompt-content {
-          font-size: 12px;
+          font-size: var(--text-xs);
         }
       }
 
@@ -300,5 +300,33 @@
   input[type="checkbox"] {
     transform: scale(1.2);
     cursor: pointer;
+  }
+}
+
+// settings.module.scss 添加
+.custom-css-hint {
+  font-size: var(--text-sm);
+  color: var(--black);
+  margin-bottom: 12px;
+  line-height: 1.5;
+  background-color: var(--second);
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.custom-css-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.custom-css-enable {
+  display: flex;
+  align-items: center;
+  
+  input {
+    font-size: var(--text-sm);
+    margin-right: 8px;
   }
 }

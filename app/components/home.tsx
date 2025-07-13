@@ -32,6 +32,7 @@ import { ClientApi } from "../client/api";
 import { useAccessStore } from "../store";
 import { identifyDefaultClaudeModel } from "../utils/checkers";
 import { FloatingButton } from "./floating-button";
+import { CustomCssProvider } from "./CustomCssProvider";
 
 export function Loading(props: { noLogo?: boolean }) {
   return (
@@ -110,6 +111,12 @@ export function useSwitchTheme() {
       const themeColor = getCSSVar("--theme-color");
       metaDescriptionDark?.setAttribute("content", themeColor);
       metaDescriptionLight?.setAttribute("content", themeColor);
+    }
+
+    // 更新自定义CSS的主题属性
+    const customCssElem = document.getElementById("custom-css");
+    if (customCssElem) {
+      customCssElem.setAttribute("data-theme", config.theme);
     }
   }, [config.theme]);
 }
@@ -246,6 +253,7 @@ export function Home() {
   return (
     <ErrorBoundary>
       <Router>
+        <CustomCssProvider />
         <Screen />
         <FloatingButton />
       </Router>
