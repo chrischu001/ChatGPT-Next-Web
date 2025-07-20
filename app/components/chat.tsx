@@ -3161,6 +3161,116 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
     );
   };
 
+  /**
+   * 智能反缩进函数
+   * 移除一个多行字符串中每一行的公共前导空白
+   * @param text 要处理的字符串
+   * @returns 反缩进后的字符串
+   */
+  const dedent = (text: string): string => {
+    const lines = text.split("\n");
+    let minIndent: number | null = null;
+    for (const line of lines) {
+      if (line.trim() === "") continue;
+      const match = line.match(/^(\s*)/);
+      const indentLength = match ? match[1].length : 0;
+      if (minIndent === null || indentLength < minIndent) {
+        minIndent = indentLength;
+      }
+    }
+    if (minIndent === null || minIndent === 0) {
+      return text;
+    }
+    const prefix = " ".repeat(minIndent);
+    return lines
+      .map((line) =>
+        line.startsWith(prefix) ? line.substring(minIndent!) : line,
+      )
+      .join("\n");
+  };
+
+  const handleCodeUpdate = (
+    messageId: string,
+    oldCode: string,
+    newCode: string,
+  ) => {
+    chatStore.updateTargetSession(session, (session) => {
+      const msg = session.messages.find((m) => m.id === messageId);
+      if (!msg) return;
+
+      const fullContent = getMessageTextContent(msg);
+
+      const regex = /^(\s*)```(\w*)\n([\s\S]+?)\n\s*```\s*$/gm;
+
+      const normalizedOldCode = oldCode.replace(/\r\n/g, "\n").trim();
+
+      const allMatches = [...fullContent.matchAll(regex)];
+      const candidates = [];
+
+      for (const match of allMatches) {
+        const [
+          originalBlock,
+          blockIndentation, // 这是开头的缩进，我们用它来重建代码块
+          lang,
+          rawCode,
+        ] = match;
+
+        const dedentedCode = dedent(rawCode.replace(/\r\n/g, "\n"));
+
+        if (dedentedCode.trim() === normalizedOldCode) {
+          candidates.push({
+            originalBlock,
+            blockIndentation,
+            lang,
+            index: match.index!,
+          });
+        }
+      }
+
+      if (candidates.length === 0) {
+        showToast(Locale.Chat.Actions.EditFailed);
+        console.warn("无法找到要替换的代码块。");
+        return;
+      }
+
+      // if (candidates.length > 1) {
+      //   showToast(Locale.Chat.Actions.EditAmbiguous);
+      //   console.warn("发现多个内容相同的代码块，无法确定要替换哪一个。");
+      //   return;
+      // }
+
+      const target = candidates[0];
+
+      // 重建新代码时，我们用回开头捕获的缩进(blockIndentation)
+      // 以保持文档的整体结构
+      const trimmedNewCode = newCode.trim();
+      const indentedNewCode = trimmedNewCode
+        .split("\n")
+        .map((line) => `${target.blockIndentation}${line}`)
+        .join("");
+      // 注意：重建闭合```时，我们也使用与开头相同的缩进，这是一种规范化行为
+      const newBlock = `${target.blockIndentation}\`\`\`${
+        target.lang
+      }\n${indentedNewCode.trim()}\n${target.blockIndentation}\`\`\``;
+
+      const finalContent =
+        fullContent.substring(0, target.index) +
+        newBlock +
+        fullContent.substring(target.index + target.originalBlock.length);
+
+      if (typeof msg.content === "string") {
+        msg.content = finalContent;
+      } else if (Array.isArray(msg.content)) {
+        const textPart = msg.content.find((part) => part.type === "text");
+        if (textPart) {
+          textPart.text = finalContent;
+        }
+      }
+
+      showToast(Locale.Chat.Actions.EditSucceeded);
+    });
+  };
+
   const enableParamOverride =
     session.mask.modelConfig.enableParamOverride || false;
   const paramOverrideContent =
@@ -3448,6 +3558,9 @@ function ChatComponent({ modelTable }: { modelTable: Model[] }) {
                       defaultShow={i >= messages.length - 6}
                       searchingTime={message.statistic?.searchingLatency}
                       thinkingTime={message.statistic?.reasoningLatency}
+                      onCodeUpdate={(oldCode, newCode) =>
+                        handleCodeUpdate(message.id, oldCode, newCode)
+                      }
                     />
                     {getMessageImages(message).length == 1 && (
                       <Image

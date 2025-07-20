@@ -155,6 +155,8 @@
 
 <img src="./docs/images/expansion-rules.gif"/>
 
+- **支持将artifacts、聊天对话上传至 cf kv 空间生成分享页面，其中聊天对话保持交互属性**
+
 
 ### 模型自定义功能增强
 - **OpenAI 类型支持前端配置** - 一键拉取可用模型 （已停更，建议使用更加完备的【自定义 AI 提供商】功能）
@@ -224,6 +226,15 @@
 | `ICON_POSITION`            | 设置消息功能图标的位置，候选项：UP,DOWN,BOTH                                      | `DOWN`                    |
 | `SELECT_LABELS`            | 设置模型选择的标签，多个标签用英文逗号分隔                                        | -                         |
 | `MODEL_PARAMS`             | 指定模型注入参数，英文逗号分隔模型，分号分隔参数，支持`*`模式匹配，格式："modelA:key1=val1;key2=val2,modelB:key3=val3"，如：`deepseek-reasoner:max_tokens=40000,gemini-2.5-flash:max_tokens=60000;temperature=0.3` | - |
+
+### artifacts/export 上传 cloudflare kv 生成分享链接
+| 环境变量名称                | 描述                            | 默认值                    |
+|----------------------------|---------------------------------|---------------------------|
+| CLOUDFLARE_ACCOUNT_ID      | cloudflare 账户 ID              | -                        |
+| CLOUDFLARE_KV_NAMESPACE_ID | kv 空间 ID                      | -                        |
+| CLOUDFLARE_KV_API_KEY      | cloudflare 令牌（需要有kv操作权限）| -                       |
+| CLOUDFLARE_KV_TTL          | kv 数据保存时间 （单位：秒）       | -                        |
+
 
 ### 关键配置配置示例
 

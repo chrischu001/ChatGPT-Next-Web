@@ -31,6 +31,7 @@ export enum Path {
   SearchChat = "/search-chat",
   CloudBackup = "/cloud-backup",
   Artifacts = "/artifacts",
+  Share = "/share",
   CustomProvider = "/custom-provider",
 }
 
@@ -40,6 +41,7 @@ export enum ApiPath {
   Anthropic = "/api/anthropic",
   Google = "/api/google",
   Artifacts = "/api/artifacts",
+  Share = "/api/share",
 }
 
 export enum SlotID {
@@ -110,6 +112,7 @@ export enum ModelProvider {
   GPT = "GPT",
   GeminiPro = "GeminiPro",
   Claude = "Claude",
+  System = "System",
 }
 
 export const Anthropic = {
@@ -198,14 +201,12 @@ export const DEFAULT_TTS_VOICES = [
 export const VISION_MODEL_REGEXES = [
   /vision/,
   /gpt-4o/,
-  /gpt-4.1/,
-  /claude-3/,
+  /gpt-4\.1/,
+  /claude.*[34]/,
   /gemini-1\.5/,
   /gemini-exp/,
-  /gemini-2/,
+  /gemini-2\.[05]/,
   /learnlm/,
-  /qwen-vl/,
-  /qwen2-vl/,
   /gpt-4-turbo(?!.*preview)/, // Matches "gpt-4-turbo" but not "gpt-4-turbo-preview"
   /gpt-4.5/,
   /^dall-e-3$/, // Matches exactly "dall-e-3"
@@ -215,6 +216,7 @@ export const VISION_MODEL_REGEXES = [
   /kimi-latest/,
   /multimodal/,
   /llama-4/,
+  /grok-4/i,
 ];
 
 export const EXCLUDE_VISION_MODEL_REGEXES = [/claude-3-5-haiku-20241022/];

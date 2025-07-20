@@ -47,6 +47,9 @@ const cn = {
       PinToastAction: "查看",
       Delete: "删除",
       Edit: "编辑",
+      EditCode: "编辑代码块",
+      EditFailed: "编辑失败，无法找到要替换的代码块",
+      EditSucceeded: "已完成代码块编辑",
       EditToInput: "编辑为输入",
       EditNoMessage: "没有消息可以编辑",
       Save: "保存",
@@ -268,7 +271,10 @@ const cn = {
     Title: "分享聊天记录",
     Copy: "全部复制",
     Download: "下载文件",
-    Share: "分享到 ShareGPT",
+    Share: "创建分享链接",
+    ShareError: "分享失败，请检查网络连接或稍后再试",
+    ShareNotFound: "分享链接不存在",
+    ShareNotFoundDesc: "请检查链接是否正确或已过期",
     MessageFromYou: "用户",
     MessageFromChatGPT: "ChatGPT",
     Format: {
@@ -299,6 +305,9 @@ const cn = {
     Artifacts: {
       Title: "分享页面",
       Error: "分享失败",
+      Expired: "分享链接已过期或请求ID不存在",
+      SetExpiration: "设置分享过期时间",
+      ExpirationLabel: "过期时间:",
     },
   },
   Select: {
@@ -880,6 +889,7 @@ const cn = {
     SelectALL: "所有模型",
     NoPresetRule: "未预置规则",
     Replace: "替换",
+    MermaidError: "Mermaid 图表渲染失败",
   },
   Exporter: {
     Description: {
