@@ -49,9 +49,6 @@ const en: LocaleType = {
       PinToastAction: "View",
       Delete: "Delete",
       Edit: "Edit",
-      EditCode: "Edit Code Block",
-      EditFailed: "Edit failed, unable to find the code block to replace",
-      EditSucceeded: "Finished editing code block",
       EditToInput: "Edit to Input",
       EditNoMessage: "No message to edit",
       Save: "Save",
@@ -925,7 +922,7 @@ const en: LocaleType = {
     SelectALL: "All Models",
     NoPresetRule: "No preset rules",
     Replace: "Replace",
-    MermaidError: "Mermaid 图表渲染失败",
+    MermaidError: "Mermaid rendering failed, please check the syntax",
   },
   Exporter: {
     Description: {

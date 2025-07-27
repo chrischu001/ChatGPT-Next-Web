@@ -15,10 +15,9 @@ import mermaid from "mermaid";
 import Locale from "../locales";
 import LoadingIcon from "../icons/three-dots.svg";
 import ReloadButtonIcon from "../icons/reload.svg";
-
 import React from "react";
 // import { useDebouncedCallback } from "use-debounce";
-import { showImageModal, FullScreen, Modal, Input } from "./ui-lib";
+import { showImageModal, FullScreen } from "./ui-lib";
 import {
   HTMLPreview,
   HTMLPreviewHander,
@@ -274,10 +273,10 @@ export function Mermaid(props: { code: string }) {
           suppressErrors: false,
         })
         .catch((e) => {
-          const errorMsg = e.message || "Mermaid rendering error";
           // setHasError(true);
-          setErrorMessage(errorMsg);
           // console.error("[Mermaid] ", e.message);
+          const errorMsg = e.message || "Mermaid rendering error";
+          setErrorMessage(errorMsg);
         });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -312,6 +311,7 @@ export function Mermaid(props: { code: string }) {
       style={{
         cursor: "pointer",
         overflow: "auto",
+        maxHeight: "50vh",
       }}
       ref={ref}
       onClick={() => viewSvgInNewWindow()}
@@ -321,56 +321,7 @@ export function Mermaid(props: { code: string }) {
   );
 }
 
-function CodeEditModal(props: {
-  code: string;
-  onClose: () => void;
-  onSave: (newCode: string) => void;
-}) {
-  const [editedCode, setEditedCode] = useState(props.code);
-
-  const handleSave = () => {
-    props.onSave(editedCode);
-    props.onClose();
-  };
-
-  return (
-    <div className="modal-mask">
-      <Modal
-        title={Locale.Chat.Actions.EditCode}
-        onClose={props.onClose}
-        actions={[
-          <IconButton
-            key="cancel"
-            text={Locale.UI.Cancel}
-            onClick={props.onClose}
-            bordered
-          />,
-          <IconButton
-            key="save"
-            type="primary"
-            text={Locale.UI.Confirm}
-            onClick={handleSave}
-          />,
-        ]}
-      >
-        <div className={styles["code-editor-modal"]}>
-          <Input
-            value={editedCode}
-            className={styles["code-editor-content"]}
-            rows={20}
-            onInput={(e) => setEditedCode(e.currentTarget.value)}
-            autoFocus
-          />
-        </div>
-      </Modal>
-    </div>
-  );
-}
-
-export function PreCode(props: {
-  children: any;
-  onUpdate?: (oldCode: string, newCode: string) => void;
-}) {
+export function PreCode(props: { children: any; status?: boolean }) {
   const ref = useRef<HTMLPreElement>(null);
   const previewRef = useRef<HTMLPreviewHander>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -384,7 +335,7 @@ export function PreCode(props: {
     "html" | "mermaid" | "svg" | null
   >(null);
 
-  const [showEditModal, setShowEditModal] = useState(false);
+  const isStatusReady = !props.status;
 
   const chatStore = useChatStore();
   const session = chatStore.currentSession();
@@ -393,13 +344,13 @@ export function PreCode(props: {
     session.mask?.enableArtifacts !== false && config.enableArtifacts;
 
   useEffect(() => {
+    if (!isStatusReady) return;
+
     if (ref.current) {
       const codeElement = ref.current.querySelector("code");
       if (codeElement) {
         // 获取语言
         const code = codeElement.innerText;
-        if (code === originalCode) return;
-
         setOriginalCode(code);
 
         const langClass = codeElement.className.match(/language-(\w+)/);
@@ -429,7 +380,8 @@ export function PreCode(props: {
         }
       }
     }
-  }, [enableArtifacts]);
+  }, [enableArtifacts, isStatusReady]);
+
   const copyCode = () => {
     copyToClipboard(originalCode);
   };
@@ -470,6 +422,14 @@ export function PreCode(props: {
       const blob = new Blob([previewContent], { type: "image/svg+xml" });
       showImageModal(URL.createObjectURL(blob));
     }
+    // else if (contentType === "html") {
+    //   const win = window.open("", "_blank");
+    //   if (win) {
+    //     win.document.write(previewContent);
+    //     win.document.title = "HTML Preview";
+    //     win.document.close();
+    //   }
+    // }
   };
   const renderPreview = () => {
     if (!previewContent) return null;
@@ -521,14 +481,6 @@ export function PreCode(props: {
           )}
         </div>
         <div className={styles["code-header-right"]}>
-          {props.onUpdate && (
-            <button
-              className={styles["code-header-btn"]}
-              onClick={() => setShowEditModal(true)}
-            >
-              {Locale.Chat.Actions.Edit}
-            </button>
-          )}
           <button className={styles["code-header-btn"]} onClick={copyCode}>
             {Locale.Chat.Actions.Copy}
           </button>
@@ -561,18 +513,6 @@ export function PreCode(props: {
           <pre ref={ref}>{props.children}</pre>
         )}
       </div>
-
-      {showEditModal && (
-        <CodeEditModal
-          code={originalCode}
-          onClose={() => setShowEditModal(false)}
-          onSave={(newCode) => {
-            if (props.onUpdate) {
-              props.onUpdate(originalCode, newCode);
-            }
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -718,6 +658,23 @@ function escapeDollarNumber(text: string) {
   }
 
   return escapedText;
+}
+
+function autoFixLatexDisplayMode(text: string): string {
+  // 定义一系列常见的、必须在展示模式下使用的 LaTeX 环境
+  const displayEnvs =
+    /\\begin\{(?:equation|equation\*|align|align\*|gather|gather\*|matrix|pmatrix|bmatrix|vmatrix|Vmatrix|split)\}/;
+
+  // 这个正则表达式用于匹配被单美元符号包裹的内容（同时避免匹配双美元符号）
+  return text.replace(/\$(?!\$)([\s\S]*?)(?<!\$)\$/g, (match, content) => {
+    // 如果一个行内公式块的内容，包含了展示模式的环境...
+    if (displayEnvs.test(content)) {
+      // ...就将这个块升级为展示模式，即把 `$` 替换为 `$$`
+      return `$$${content}$$`;
+    }
+    // 否则，保持原样
+    return match;
+  });
 }
 
 function escapeBrackets(text: string) {
@@ -878,11 +835,11 @@ function R_MarkDownContent(props: {
   searchingTime?: number;
   thinkingTime?: number;
   fontSize?: number;
-  onCodeUpdate?: (oldCode: string, newCode: string) => void;
+  status?: boolean;
 }) {
   const escapedContent = useMemo(() => {
-    const originalContent = formatBoldText(
-      escapeBrackets(escapeDollarNumber(props.content)),
+    const originalContent = autoFixLatexDisplayMode(
+      formatBoldText(escapeBrackets(escapeDollarNumber(props.content))),
     );
     const { searchText, remainText: searchRemainText } = formatSearchText(
       originalContent,
@@ -894,7 +851,7 @@ function R_MarkDownContent(props: {
     );
     const content = searchText + thinkText + remainText;
     return tryWrapHtmlCode(content);
-  }, [props.content]);
+  }, [props.content, props.searchingTime, props.thinkingTime]);
 
   return (
     <ReactMarkdown
@@ -914,7 +871,7 @@ function R_MarkDownContent(props: {
       components={
         {
           pre: (preProps: any) => (
-            <PreCode {...preProps} onUpdate={props.onCodeUpdate} />
+            <PreCode {...preProps} status={props.status} />
           ),
           code: CustomCode,
           p: (pProps: any) => <p {...pProps} dir="auto" />,
@@ -1072,7 +1029,6 @@ export function Markdown(
     searchingTime?: number;
     thinkingTime?: number;
     status?: boolean | undefined;
-    onCodeUpdate?: (oldCode: string, newCode: string) => void;
   } & React.DOMAttributes<HTMLDivElement>,
 ) {
   const mdRef = useRef<HTMLDivElement>(null);
@@ -1102,11 +1058,12 @@ export function Markdown(
         <LoadingIcon />
       ) : (
         <MarkdownContent
+          key={processedContent}
           content={processedContent}
           searchingTime={props.searchingTime}
           thinkingTime={props.thinkingTime}
           fontSize={props.fontSize}
-          onCodeUpdate={props.onCodeUpdate}
+          status={props.status}
         />
       )}
     </div>

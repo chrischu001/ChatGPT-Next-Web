@@ -524,7 +524,6 @@ function ImageModalContent({
         const fileExt = getFileExtension(img) || "jpg";
         fileName = `image_${timestamp}.${fileExt}`;
       }
-
       // const fileExt = getFileExtension(img) || "jpg"; // img 是你图片 URL 的变量
       // const fileName = `image_${timestamp}.${fileExt}`;
 
